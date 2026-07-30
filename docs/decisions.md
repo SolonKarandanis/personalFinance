@@ -1,0 +1,87 @@
+# Project Decisions
+
+Personal finance dashboard — a web app for tracking accounts, transactions, categories, and budgets. This document records the architecture and scope decisions made during planning, along with the alternatives considered and why they were passed on.
+
+## Stack overview
+
+| Concern       | Choice                          |
+|----------------|----------------------------------|
+| Monorepo tool  | Turborepo                       |
+| Backend        | NestJS                          |
+| Database       | PostgreSQL                      |
+| ORM            | TypeORM                         |
+| API style      | Plain REST (Nest controllers)   |
+| Auth           | Passport.js + JWT (self-rolled) |
+| Frontend       | Angular 22                      |
+
+## Backend: NestJS
+
+Chosen as the API framework. Decorator-based, dependency-injection-driven — this shaped several downstream choices below (ORM, frontend).
+
+## Database & ORM: PostgreSQL + TypeORM
+
+Considered TypeORM, Prisma, and Drizzle.
+
+- **TypeORM** — chosen. First-class official integration (`@nestjs/typeorm`), and its decorator/DI style matches Nest's own architecture directly — most Nest tutorials and starters pair the two for this reason.
+- **Prisma** — best standalone DX and type-safety, but doesn't use decorators/DI natively; would need a `PrismaService` wrapper to fit into Nest's module system. Passed on in favor of the more native fit.
+- **Drizzle** — lightest weight and most SQL-transparent, best suited to serverless/edge deployments. Weakest "native" fit with Nest (no decorators, manual provider wiring). A split approach (TypeORM for CRUD, Drizzle for dashboard/reporting queries) was considered but rejected — two connection pools and duplicated schema definitions (Drizzle schema mirroring TypeORM-managed tables) added real maintenance overhead for a solo project. Decision: start with TypeORM everywhere and use its QueryBuilder/raw SQL for analytics queries; revisit Drizzle only if that becomes genuinely painful.
+
+## API style: Plain REST
+
+Considered `nestjs-trpc` and oRPC as alternatives to standard `@Controller()` REST endpoints.
+
+- **tRPC / nestjs-trpc** — gives end-to-end type safety by sharing the router's TypeScript type directly with the frontend (no schema/codegen). Works best in a monorepo where the frontend can import that type, and `@trpc/react-query` pairs natively with TanStack Query. Not adopted here since the frontend is Angular, where tRPC client support is much thinner, and a REST/OpenAPI surface was preferred over TS-only typing.
+- **oRPC** — similar type-safe RPC approach, but OpenAPI-first: auto-generates OpenAPI docs from the same procedure definitions, making it a better fit if third-party or non-TypeScript clients (e.g. a future mobile app) need to consume the API.
+- **Decision**: neither is needed without third-party/non-TS API consumers. Both would also replace REST controllers rather than layer on top of them, adding architectural complexity for no current benefit. Plain REST it is.
+
+## Auth: Passport.js + JWT
+
+Considered a self-rolled Passport.js setup vs. a managed provider (Clerk, Auth0, Supabase Auth).
+
+- **Decision**: self-rolled Passport.js + JWT. Standard NestJS approach (`@nestjs/passport`, `passport-local` for login, `passport-jwt` for protecting routes), full control, no external dependency or cost.
+- Access token (short-lived) + refresh token (longer-lived, rotated) pattern.
+- Passwords hashed with bcrypt or argon2.
+- Managed providers were a reasonable alternative (handle password reset/email verification/social login out of the box) but weren't necessary for this project's scope.
+
+## Frontend: Angular 22
+
+Considered Angular, AnalogJS, and a React SPA (Vite + TanStack Router + TanStack Query).
+
+- **Angular** — chosen. Shares a mental model with NestJS: both use decorators and dependency injection (Nest's architecture was explicitly inspired by Angular's), so switching between backend and frontend code feels consistent. `HttpClient` + interceptors gives a clean, centralized way to attach the JWT to every request and handle 401→refresh logic; router guards (`CanActivate`) map directly to the auth-guard pattern needed for protected dashboard routes.
+- **AnalogJS** — a meta-framework on top of Angular adding SSR/SSG and file-based routing (Angular's answer to Next.js). Explicitly ruled out: this dashboard sits behind auth, so there's no SEO benefit to SSR, and it would add hydration/server-client complexity for no real gain. Its bundled API-routes feature would also be redundant since NestJS is already the API layer.
+- **TanStack Router (React SPA)** — a strong alternative, especially given `@trpc/react-query`'s native pairing with TanStack Query. Passed on once Angular was chosen for the DI/decorator consistency with the backend.
+
+## Monorepo: Turborepo
+
+Considered Nx, Turborepo, and plain pnpm workspaces (no build orchestrator).
+
+- **Nx** — has first-party generators for both Nest and Angular, plus caching, task orchestration, and a dependency graph with enforceable module boundaries. Passed on: its main value (caching/graph/boundary enforcement at scale) matters more for larger teams than a solo project, and it's more machinery than needed here.
+- **Plain pnpm workspaces** — simplest option, would still allow sharing a `packages/shared-types` library between `api` and `frontend`, but no task caching or orchestration.
+- **Decision**: Turborepo — a middle ground. Gets the caching benefit of Nx without its generators/opinionated plugin ecosystem.
+
+## Scope decisions
+
+- **Single currency only.** No multi-currency/FX support — accounts and transactions assume one currency (e.g. USD). Ruled out an FX-rates table and conversion logic as unnecessary complexity for personal use.
+- **Manual transaction entry for v1**, but the `Transaction` schema plans ahead for CSV import and bank sync (Plaid) later via `source`, `externalId`, and `isPending` fields — cheap to add now, painful to retrofit once real transaction data exists.
+- **Transfers** between a user's own accounts are modeled as two paired `Transaction` rows (linked via `transferPairId`) rather than a separate `Transfer` entity, keeping account balances a simple sum-of-transactions.
+
+## Data model
+
+- **User** — id, email, passwordHash, name, currency (single default, e.g. "USD"), createdAt
+- **Account** — id, userId (FK), name, type (checking/savings/credit_card/cash/investment), institution, isArchived, createdAt
+- **Category** — id, userId (nullable → system default vs. user-created), name, type (income/expense), parentId (self-FK, for subcategories), icon/color
+- **Transaction** — id, accountId (FK), categoryId (FK, nullable), amount, date, description/merchant, notes, type (income/expense/transfer), transferPairId (self-FK), source (manual/csv_import/plaid), externalId (nullable, unique per source), isPending (bool, default false), createdAt
+- **Budget** — id, userId (FK), categoryId (FK), amount, period (weekly/monthly/yearly), startDate
+
+## Repo & infra notes
+
+- Repo: `personalFinance/`, top-level `api/` (NestJS) and `frontend/` (Angular) packages — not nested under an `apps/` directory.
+- GitHub remote: `https://github.com/SolonKarandanis/personalFinance.git`.
+- **Node version**: Angular 22 requires Node ≥24.15.0. The system's default Node (via nvm) was v22.14.0, so 24.18.1 was installed alongside it (global default left untouched) and pinned for this repo via `.nvmrc` and `package.json` engines. Run `nvm use` in the repo to pick it up.
+- `lmdb`'s native addon fails to build during `pnpm install` on this system (old system g++/libstdc++). It's only an optional Angular CLI build-cache backend — harmless, builds and serving work fine without it.
+
+## Status
+
+Scaffolded and pushed to GitHub: Turborepo pipeline wired, `api` (NestJS 11) and `frontend` (Angular 22.1.1) both build and boot successfully.
+
+Not yet done: Postgres connection/TypeORM config, entities, auth module, any UI, `packages/shared-types`.
