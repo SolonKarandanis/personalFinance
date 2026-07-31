@@ -5,10 +5,10 @@ import {
   JoinColumn,
   ManyToOne,
   OneToMany,
-  PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Transaction } from './transaction.entity';
 import { User } from './user.entity';
+import { AbstractEntity } from './abstract.entity';
 
 export enum AccountType {
   CHECKING = 'checking',
@@ -19,17 +19,7 @@ export enum AccountType {
 }
 
 @Entity('accounts')
-export class Account {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column({
-    name: 'domain_id',
-    type: 'uuid',
-    unique: true,
-    default: () => 'gen_random_uuid()',
-  })
-  domainId: string;
+export class Account extends AbstractEntity<Account> {
 
   @Column({ name: 'user_id' })
   userId: number;
@@ -56,7 +46,4 @@ export class Account {
   @OneToMany(() => Transaction, (transaction) => transaction.account)
   transactions: Transaction[];
 
-  constructor(partial: Partial<Account>) {
-    Object.assign(this, partial);
-  }
 }

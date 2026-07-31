@@ -3,11 +3,11 @@ import {
   CreateDateColumn,
   Entity,
   OneToMany,
-  PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Account } from './account.entity';
 import { Budget } from './budget.entity';
 import { Category } from './category.entity';
+import { AbstractEntity } from './abstract.entity';
 
 export enum UserStatus {
   ACTIVE = 'active',
@@ -15,17 +15,7 @@ export enum UserStatus {
 }
 
 @Entity('users')
-export class User {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column({
-    name: 'domain_id',
-    type: 'uuid',
-    unique: true,
-    default: () => 'gen_random_uuid()',
-  })
-  domainId: string;
+export class User extends AbstractEntity<User> {
 
   @Column({ unique: true })
   email: string;
@@ -64,7 +54,4 @@ export class User {
   @OneToMany(() => Budget, (budget) => budget.user)
   budgets: Budget[];
 
-  constructor(partial: Partial<User>) {
-    Object.assign(this, partial);
-  }
 }

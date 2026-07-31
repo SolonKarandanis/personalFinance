@@ -4,10 +4,10 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
-  PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Category } from './category.entity';
 import { User } from './user.entity';
+import { AbstractEntity } from './abstract.entity';
 
 export enum BudgetPeriod {
   WEEKLY = 'weekly',
@@ -16,17 +16,7 @@ export enum BudgetPeriod {
 }
 
 @Entity('budgets')
-export class Budget {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column({
-    name: 'domain_id',
-    type: 'uuid',
-    unique: true,
-    default: () => 'gen_random_uuid()',
-  })
-  domainId: string;
+export class Budget extends AbstractEntity<Budget> {
 
   @Column({ name: 'user_id' })
   userId: number;
@@ -54,7 +44,4 @@ export class Budget {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  constructor(partial: Partial<Budget>) {
-    Object.assign(this, partial);
-  }
 }

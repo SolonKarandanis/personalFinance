@@ -4,11 +4,11 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
-  PrimaryGeneratedColumn,
   Unique,
 } from 'typeorm';
 import { Account } from './account.entity';
 import { Category } from './category.entity';
+import { AbstractEntity } from './abstract.entity';
 
 export enum TransactionType {
   INCOME = 'income',
@@ -24,17 +24,7 @@ export enum TransactionSource {
 
 @Entity('transactions')
 @Unique('UQ_transaction_source_external_id', ['source', 'externalId'])
-export class Transaction {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column({
-    name: 'domain_id',
-    type: 'uuid',
-    unique: true,
-    default: () => 'gen_random_uuid()',
-  })
-  domainId: string;
+export class Transaction extends AbstractEntity<Transaction> {
 
   @Column({ name: 'account_id' })
   accountId: number;
@@ -95,8 +85,4 @@ export class Transaction {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
-
-  constructor(partial: Partial<Transaction>) {
-    Object.assign(this, partial);
-  }
 }
