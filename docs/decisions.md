@@ -14,6 +14,13 @@ Personal finance dashboard — a web app for tracking accounts, transactions, ca
 | Auth           | Passport.js + JWT (self-rolled) |
 | Frontend       | Angular 22                      |
 
+## Authorization pattern
+
+Two different ownership-check patterns, chosen deliberately per case rather than one-size-fits-all:
+
+- **User self-service routes** (`/users/:domainId/...`) use a guard (`OwnDomainIdGuard`) that compares the JWT's `domainId` claim against the URL's `:domainId`. This works because for these routes the URL identifier *is* the owner identifier — no DB lookup needed, just a claim comparison.
+- **Account/Category/Transaction/Budget** (once built) will instead scope every service query by `userId` directly, e.g. `findOneBy({ domainId, userId })`, rather than a separate ownership guard. For these, the URL identifier is the *resource's* id, not the owner's — a guard would need to load the row to check ownership, then the service loads it again to act on it. Scoping the query itself does the lookup and the enforcement in one step, and returns 404 (not 403) when a `domainId` belongs to another user — a 403 would confirm the resource exists, leaking information a 404 doesn't. Standing rule: every service method for these entities takes `userId` (from the JWT) alongside `domainId`, and always filters by both together.
+
 ## Backend: NestJS
 
 Chosen as the API framework. Decorator-based, dependency-injection-driven — this shaped several downstream choices below (ORM, frontend).
