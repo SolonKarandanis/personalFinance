@@ -13,13 +13,13 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @UseGuards(JwtAuthGuard)
-  @Get('me')
+  @Get('account')
   account(@Req() req: Request & { user: JwtPayload }): Promise<UserDto> {
     return this.usersService.getSafeUser(req.user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Patch('me')
+  @Patch('account')
   updateProfile(
     @Req() req: Request & { user: JwtPayload },
     @Body() dto: UpdateProfileDto,
@@ -28,7 +28,7 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Patch('me/password')
+  @Patch('account/password')
   changePassword(
     @Req() req: Request & { user: JwtPayload },
     @Body() dto: ChangePasswordDto,
@@ -37,13 +37,13 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Patch('me/activate')
+  @Patch('account/activate')
   activate(@Req() req: Request & { user: JwtPayload }): Promise<UserDto> {
     return this.usersService.activate(req.user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Patch('me/deactivate')
+  @Patch('account/deactivate')
   deactivate(@Req() req: Request & { user: JwtPayload }): Promise<UserDto> {
     return this.usersService.deactivate(req.user.sub);
   }
