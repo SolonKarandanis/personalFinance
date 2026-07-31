@@ -64,6 +64,17 @@ Considered a self-rolled Passport.js setup vs. a managed provider (Clerk, Auth0,
 - Passwords hashed with bcrypt or argon2.
 - Managed providers were a reasonable alternative (handle password reset/email verification/social login out of the box) but weren't necessary for this project's scope.
 
+### Token transport: split, not all-cookies
+
+Considered putting both tokens in cookies vs. keeping the original all-JSON-body design. Chose a split instead of either extreme:
+
+- **Refresh token → httpOnly cookie** (`sameSite: strict`, scoped to `path: /auth/refresh` only, `secure` in production). Long-lived (7 days) and highly sensitive, so keeping it out of reach of JavaScript entirely removes it as an XSS target.
+- **Access token → stays in the JSON response body**, held in memory by the client and sent via `Authorization: Bearer` header, unchanged from the original design. Short-lived (15 min), so a worst-case XSS exposure window is small, and keeping it out of cookies means it's never auto-attached to requests — which is what makes header-based auth naturally CSRF-resistant.
+
+Putting the refresh token in a cookie does introduce some CSRF surface on `/auth/refresh` specifically, since browsers auto-attach cookies. `sameSite: strict` closes the large majority of that for a same-origin SPA; a full CSRF-token scheme was considered unnecessary on top of that, since every other authenticated action stays header-based and is unaffected.
+
+`JwtStrategy`/`JwtAuthGuard` (access token validation) didn't need to change at all — only `JwtRefreshStrategy` (now reads the cookie via a custom extractor instead of `ExtractJwt.fromBodyField`) and `AuthController` (sets/clears the cookie via `@Res({ passthrough: true })`, alongside the existing server-side revocation in `AuthService`). Requires `cookie-parser` and CORS configured with `credentials: true` and an explicit origin (`CORS_ORIGIN` env var) — `origin: '*'` doesn't work once credentials/cookies are involved. Verified end-to-end with curl's cookie jar: register/login set the cookie, refresh works via cookie with no body needed, refresh without a cookie 401s, and logout both clears the cookie client-side and revokes it server-side.
+
 ## Frontend: Angular 22
 
 Considered Angular, AnalogJS, and a React SPA (Vite + TanStack Router + TanStack Query).

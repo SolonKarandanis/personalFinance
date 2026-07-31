@@ -16,11 +16,12 @@ Tracks what's actually built vs. what's still planned. See `decisions.md` for th
 - `User.status` (`active`/`deactivated`) enforced at login and refresh.
 
 ### Auth (`/auth`)
-- `POST /auth/register` — creates a user, returns access + refresh tokens.
-- `POST /auth/login` — Passport local strategy (email/password), returns tokens.
-- `POST /auth/refresh` — rotates access + refresh tokens; old refresh tokens are invalidated (SHA-256 hash + constant-time compare, not bcrypt — see decisions.md for why).
-- `POST /auth/logout` — revokes the stored refresh token.
+- `POST /auth/register` — creates a user, sets the refresh token cookie, returns `{ accessToken }`.
+- `POST /auth/login` — Passport local strategy (email/password), same cookie + response shape as register.
+- `POST /auth/refresh` — reads the refresh token from the cookie (not the body), rotates it, sets the new cookie, returns a new `{ accessToken }`. Old refresh tokens are invalidated (SHA-256 hash + constant-time compare, not bcrypt — see decisions.md for why).
+- `POST /auth/logout` — revokes the stored refresh token server-side and clears the cookie client-side.
 - Deactivated users are rejected at login and refresh (403).
+- **Token transport**: refresh token lives in an httpOnly cookie (`sameSite: strict`, scoped to `/auth/refresh`, `secure` in production) — never touched by JS. Access token stays in the JSON response body / `Authorization: Bearer` header, unchanged. See decisions.md for the reasoning. Requires `cookie-parser` + CORS with `credentials: true` (wired in `main.ts`); `CORS_ORIGIN` env var (default `http://localhost:4200`) sets the allowed origin.
 
 ### User management (`/users`)
 - `GET /users/account` — caller's own profile (derived from JWT), returns `UserDto`.

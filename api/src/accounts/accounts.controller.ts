@@ -7,12 +7,11 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
-  Req,
   UseGuards,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { JwtPayload } from '../auth/strategies/jwt.strategy';
+import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { AccountsService } from './accounts.service';
 import { AccountDto } from './dto/account.dto';
 import { CreateAccountDto } from './dto/create-account.dto';
@@ -25,41 +24,39 @@ export class AccountsController {
 
   @Post()
   create(
-    @Req() req: Request & { user: JwtPayload },
+    @CurrentUser() user: JwtPayload,
     @Body() dto: CreateAccountDto,
   ): Promise<AccountDto> {
-    return this.accountsService.create(req.user.sub, dto);
+    return this.accountsService.create(user.sub, dto);
   }
 
   @Get()
-  findAll(
-    @Req() req: Request & { user: JwtPayload },
-  ): Promise<AccountDto[]> {
-    return this.accountsService.findAll(req.user.sub);
+  findAll(@CurrentUser() user: JwtPayload): Promise<AccountDto[]> {
+    return this.accountsService.findAll(user.sub);
   }
 
   @Get(':domainId')
   findOne(
-    @Req() req: Request & { user: JwtPayload },
+    @CurrentUser() user: JwtPayload,
     @Param('domainId', ParseUUIDPipe) domainId: string,
   ): Promise<AccountDto> {
-    return this.accountsService.findOne(req.user.sub, domainId);
+    return this.accountsService.findOne(user.sub, domainId);
   }
 
   @Patch(':domainId')
   update(
-    @Req() req: Request & { user: JwtPayload },
+    @CurrentUser() user: JwtPayload,
     @Param('domainId', ParseUUIDPipe) domainId: string,
     @Body() dto: UpdateAccountDto,
   ): Promise<AccountDto> {
-    return this.accountsService.update(req.user.sub, domainId, dto);
+    return this.accountsService.update(user.sub, domainId, dto);
   }
 
   @Delete(':domainId')
   archive(
-    @Req() req: Request & { user: JwtPayload },
+    @CurrentUser() user: JwtPayload,
     @Param('domainId', ParseUUIDPipe) domainId: string,
   ): Promise<AccountDto> {
-    return this.accountsService.archive(req.user.sub, domainId);
+    return this.accountsService.archive(user.sub, domainId);
   }
 }

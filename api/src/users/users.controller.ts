@@ -5,13 +5,12 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
-  Req,
   UseGuards,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OwnDomainIdGuard } from '../auth/guards/own-domain-id.guard';
-import { JwtPayload } from '../auth/strategies/jwt.strategy';
+import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UserDto } from './dto/user.dto';
@@ -24,8 +23,8 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Get('account')
-  account(@Req() req: Request & { user: JwtPayload }): Promise<UserDto> {
-    return this.usersService.getSafeUser(req.user.sub);
+  account(@CurrentUser() user: JwtPayload): Promise<UserDto> {
+    return this.usersService.getSafeUser(user.sub);
   }
 
   @UseGuards(JwtAuthGuard, OwnDomainIdGuard)
