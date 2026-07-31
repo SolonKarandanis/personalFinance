@@ -5,6 +5,7 @@ import { AccountsModule } from './accounts/accounts.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { CategoriesModule } from './categories/categories.module';
 import { typeOrmOptions } from './database/typeorm-options';
 import { UsersModule } from './users/users.module';
 
@@ -15,6 +16,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     AuthModule,
     AccountsModule,
+    CategoriesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

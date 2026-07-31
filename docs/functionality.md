@@ -38,10 +38,20 @@ Tracks what's actually built vs. what's still planned. See `decisions.md` for th
 - `Account.currentBalance` is cached, not computed on read, and kept in sync entirely by Postgres triggers (not application code) — see `decisions.md`. Verified through the real API: creating with an `initialBalance` seeds `currentBalance` to match, editing `initialBalance` shifts `currentBalance` by the same delta.
 - **Ownership**: no guard here (unlike Users) — every service method takes `userId` from the JWT and scopes the query by `{ domainId, userId }` together, so another user's `domainId` returns 404, not 403. Verified with two users.
 
+### Categories (`/categories`)
+- `POST /categories` — create (`name`, `type`, optional `parentDomainId`/`icon`/`color`).
+- `GET /categories` / `GET /categories/:domainId` — list/get, visible set is the caller's own categories **plus every system default** (`userId IS NULL`).
+- `PATCH /categories/:domainId` — update `name`/`icon`/`color` only; `type` and `parentDomainId` aren't updatable post-creation (would need cascading re-validation of children, not worth the complexity yet).
+- `DELETE /categories/:domainId` — a real hard delete, unlike Accounts: `Transaction.category` is already `onDelete: SET NULL`, so deleting a category can't destroy transaction data, only uncategorize it.
+- **Ownership split**: reads use `{ domainId, userId } OR { domainId, userId: NULL }`; writes (`update`/`remove`) use `{ domainId, userId }` only — a system default can never be edited or deleted through this API, by anyone, including whoever's "using" it. Verified: writes on defaults 404 for every user, cross-user writes on custom categories 404.
+- **Subcategories**: capped at one level (a category with a `parentId` can't itself be a parent — rejected with 400), child's `type` must match the parent's `type` (400 on mismatch), and the parent must be a system default or belong to the same user (cross-user parenting 404s). All four rules verified end-to-end.
+- **Default categories**: 17 starter categories (4 income, 13 expense) seeded once via the `SeedDefaultCategories` migration — plain `INSERT`s, `userId` left `NULL`, no runtime seeding logic.
+- `CategoryDto.isSystemDefault` tells clients which categories to hide edit/delete affordances for.
+
 ## Planned / not yet implemented
 
 - **Frontend**: still the default Angular scaffold — no login/register screens, no dashboard, no routing/guards, no HTTP client wiring for the API yet.
-- **Category/Transaction/Budget CRUD**: entities exist, no controllers/services yet. `Transaction` will need to apply the same `{ domainId, userId }` scoping pattern as Accounts, plus the transfer-pairing logic (atomic two-row create via `EntityManager`/`dataSource.transaction()`) discussed but not yet built.
+- **Transaction/Budget CRUD**: entities exist, no controllers/services yet. `Transaction` will need the same `{ domainId, userId }` scoping pattern as Accounts/Categories, plus the transfer-pairing logic (atomic two-row create via `EntityManager`/`dataSource.transaction()`) discussed but not yet built, plus deciding whether `Transaction.type` must match its `Category.type` (deferred when Categories was planned).
 - **Dashboard/reporting**: the actual point of the app — spending by category, budget vs. actual, balances over time. Needs Transactions/Budgets CRUD first.
 - **CSV import / Plaid bank sync**: schema is ready (`source`, `externalId`, `isPending` on `Transaction`), no import/sync logic written. Will exercise the balance triggers as a new write path — that's exactly why triggers were chosen over application-level recalculation.
 - **Shared types package**: discussed early on (a `packages/shared-types` for DTOs shared between `api` and `frontend`) but never set up.
