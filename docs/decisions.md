@@ -14,6 +14,20 @@ Personal finance dashboard — a web app for tracking accounts, transactions, ca
 | Auth           | Passport.js + JWT (self-rolled) |
 | Frontend       | Angular 22                      |
 
+## Account balance: cached, kept in sync via DB triggers
+
+`Account` has two balance fields: `initialBalance` (user-editable, covers real-world history predating when the account was added) and `currentBalance` (derived, never written directly by application code).
+
+Considered computing `currentBalance` on every read (`initialBalance + SUM(transactions)`) vs. caching it in a column. Chose to cache it, and chose to keep it in sync via **Postgres triggers** rather than application code, specifically because future write paths (CSV import, Plaid sync) are already planned — a trigger fires no matter what writes a `transactions` row, while application-level recalculation only works if every current *and future* write path remembers to call it. For a domain where balance correctness is the entire point of the app, that guarantee was worth the cost of moving some logic into SQL instead of TypeScript.
+
+`Transaction.amount` is **signed** (expense = negative, income = positive; each leg of a transfer carries whatever sign matches its own account's effect) specifically so the balance math is a flat sum with no `CASE WHEN type = ...` branching.
+
+Two triggers, added in `AddAccountBalanceTriggers` migration:
+- `trg_accounts_initial_balance_change` (`BEFORE INSERT OR UPDATE ON accounts`) — seeds `currentBalance = initialBalance` on creation, and shifts `currentBalance` by the same delta if `initialBalance` is edited later.
+- `trg_transactions_balance` (`AFTER INSERT OR UPDATE OR DELETE ON transactions`) — adjusts the owning account's `currentBalance` by the transaction's signed amount; an `UPDATE` reverses the old row's effect on the old account and applies the new row's effect on the new account, which is correct whether or not `accountId` itself changed.
+
+Both were verified directly with SQL (insert/update/delete/initialBalance-edit sequence, wrapped in a rolled-back transaction) before any application code was built on top — caught a real bug where the first version only handled `initialBalance` *changes*, not the initial seed on account creation (new accounts started at 0 instead of matching `initialBalance`).
+
 ## Authorization pattern
 
 Two different ownership-check patterns, chosen deliberately per case rather than one-size-fits-all:
