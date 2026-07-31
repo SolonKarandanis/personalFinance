@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OwnDomainIdGuard } from '../auth/guards/own-domain-id.guard';
 import { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -27,7 +28,7 @@ export class UsersController {
     return this.usersService.getSafeUser(req.user.sub);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, OwnDomainIdGuard)
   @Patch(':domainId')
   updateProfile(
     @Param('domainId', ParseUUIDPipe) domainId: string,
@@ -36,7 +37,7 @@ export class UsersController {
     return this.usersService.updateProfile(domainId, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, OwnDomainIdGuard)
   @Patch(':domainId/password')
   changePassword(
     @Param('domainId', ParseUUIDPipe) domainId: string,
@@ -45,7 +46,7 @@ export class UsersController {
     return this.usersService.changePassword(domainId, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, OwnDomainIdGuard)
   @Patch(':domainId/activate')
   activate(
     @Param('domainId', ParseUUIDPipe) domainId: string,
@@ -53,7 +54,7 @@ export class UsersController {
     return this.usersService.activate(domainId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, OwnDomainIdGuard)
   @Patch(':domainId/deactivate')
   deactivate(
     @Param('domainId', ParseUUIDPipe) domainId: string,

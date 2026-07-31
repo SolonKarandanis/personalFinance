@@ -6,6 +6,7 @@ import { requireEnv } from '../../config/env';
 export interface JwtPayload {
   sub: number;
   email: string;
+  domainId: string;
 }
 
 @Injectable()

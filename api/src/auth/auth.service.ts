@@ -102,7 +102,12 @@ export class AuthService {
     // second: JWT signing is deterministic, and iat only has second-level
     // granularity, so without it a same-second reissue produces a byte-identical
     // token (defeating rotation/revocation).
-    const payload = { sub: user.id, email: user.email, jti: randomUUID() };
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      domainId: user.domainId,
+      jti: randomUUID(),
+    };
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {

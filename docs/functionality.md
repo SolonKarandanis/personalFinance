@@ -27,7 +27,7 @@ Tracks what's actually built vs. what's still planned. See `decisions.md` for th
 - `PATCH /users/:domainId` — update `firstName`/`lastName`.
 - `PATCH /users/:domainId/password` — change password (requires current password; revokes the stored refresh token on success).
 - `PATCH /users/:domainId/activate` / `PATCH /users/:domainId/deactivate` — set account status.
-- **Known gap**: these four `:domainId` routes only require *some* valid JWT (`JwtAuthGuard`) — they don't check that the caller's own account matches the target `domainId`. Any authenticated user can currently act on any other user's account. Acceptable for now (no roles/permissions concept exists yet), but needs closing before this app has more than one real user.
+- **Ownership enforcement**: `OwnDomainIdGuard` (stacked after `JwtAuthGuard` on all four `:domainId` routes) checks the JWT's `domainId` claim against the URL's `:domainId` and 403s on mismatch — a user can only act on their own account. `domainId` is now embedded directly in the access/refresh token payload (alongside `sub`/`email`) so this check costs no extra DB query. Verified with two separate users: cross-user access 403s, self-access succeeds.
 
 ## Planned / not yet implemented
 
@@ -36,7 +36,7 @@ Tracks what's actually built vs. what's still planned. See `decisions.md` for th
 - **Dashboard/reporting**: the actual point of the app — spending by category, budget vs. actual, balances over time. Needs the CRUD layer first.
 - **CSV import / Plaid bank sync**: schema is ready (`source`, `externalId`, `isPending` on `Transaction`), no import/sync logic written.
 - **Shared types package**: discussed early on (a `packages/shared-types` for DTOs shared between `api` and `frontend`) but never set up.
-- **Authorization / roles**: needed to close the `:domainId` gap noted above.
+- **Authorization / roles**: the Users `:domainId` gap is closed (see above), but Accounts/Categories/Transactions/Budgets will need their own ownership checks once those CRUD endpoints exist (resource's `userId` must match the caller — a different check than `OwnDomainIdGuard` since it requires loading the resource, not just comparing URL vs. token). No roles concept (e.g., admin) exists yet.
 - **Password reset / email verification**: not started.
 - **Multi-session refresh tokens**: currently one `hashedRefreshToken` per user (single active session) — no per-device session tracking.
 - **Tests**: Nest's default Jest scaffold exists, but no unit/e2e tests have been written for any of the custom auth/users/entity code yet.
