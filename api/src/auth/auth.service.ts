@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -7,7 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { requireEnv } from '../config/env';
-import { User } from '../entities/user.entity';
+import { User, UserStatus } from '../entities/user.entity';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 
@@ -15,8 +16,6 @@ export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
 }
-
-export type SafeUser = Omit<User, 'passwordHash' | 'hashedRefreshToken'>;
 
 const PASSWORD_SALT_ROUNDS = 10;
 const ACCESS_TOKEN_TTL = '15m';
@@ -65,7 +64,11 @@ export class AuthService {
       return null;
     }
     const matches = await bcrypt.compare(password, user.passwordHash);
-    return matches ? user : null;
+    if (!matches) {
+      return null;
+    }
+    this.assertActive(user);
+    return user;
   }
 
   login(user: User): Promise<AuthTokens> {
@@ -80,6 +83,7 @@ export class AuthService {
     if (!hashesMatch(hashToken(refreshToken), user.hashedRefreshToken)) {
       throw new UnauthorizedException();
     }
+    this.assertActive(user);
     return this.issueTokens(user);
   }
 
@@ -87,13 +91,10 @@ export class AuthService {
     await this.usersService.setHashedRefreshToken(userId, null);
   }
 
-  async getProfile(userId: number): Promise<SafeUser> {
-    const user = await this.usersService.findById(userId);
-    if (!user) {
-      throw new UnauthorizedException();
+  private assertActive(user: User): void {
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new ForbiddenException('Account is deactivated');
     }
-    const { passwordHash, hashedRefreshToken, ...safeUser } = user;
-    return safeUser;
   }
 
   private async issueTokens(user: User): Promise<AuthTokens> {

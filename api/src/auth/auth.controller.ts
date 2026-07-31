@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { User } from '../entities/user.entity';
-import { AuthService, AuthTokens, SafeUser } from './auth.service';
+import { AuthService, AuthTokens } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -43,11 +43,5 @@ export class AuthController {
   ): Promise<{ success: true }> {
     await this.authService.logout(req.user.sub);
     return { success: true };
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get('me')
-  me(@Req() req: Request & { user: JwtPayload }): Promise<SafeUser> {
-    return this.authService.getProfile(req.user.sub);
   }
 }

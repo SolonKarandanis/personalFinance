@@ -9,6 +9,11 @@ import { Account } from './account.entity';
 import { Budget } from './budget.entity';
 import { Category } from './category.entity';
 
+export enum UserStatus {
+  ACTIVE = 'active',
+  DEACTIVATED = 'deactivated',
+}
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn()
@@ -39,6 +44,13 @@ export class User {
 
   @Column({ default: 'EUR' })
   currency: string;
+
+  @Column({
+    type: 'enum',
+    enum: UserStatus,
+    default: UserStatus.ACTIVE,
+  })
+  status: UserStatus;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
