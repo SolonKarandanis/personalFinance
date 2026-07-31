@@ -95,4 +95,8 @@ export class Transaction {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  constructor(partial: Partial<Transaction>) {
+    Object.assign(this, partial);
+  }
 }

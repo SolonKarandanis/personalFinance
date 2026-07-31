@@ -53,4 +53,8 @@ export class Budget {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  constructor(partial: Partial<Budget>) {
+    Object.assign(this, partial);
+  }
 }

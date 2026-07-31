@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtPayload } from '../auth/strategies/jwt.strategy';
@@ -19,32 +28,36 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Patch('account')
+  @Patch(':domainId')
   updateProfile(
-    @Req() req: Request & { user: JwtPayload },
+    @Param('domainId', ParseUUIDPipe) domainId: string,
     @Body() dto: UpdateProfileDto,
   ): Promise<UserDto> {
-    return this.usersService.updateProfile(req.user.sub, dto);
+    return this.usersService.updateProfile(domainId, dto);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Patch('account/password')
+  @Patch(':domainId/password')
   changePassword(
-    @Req() req: Request & { user: JwtPayload },
+    @Param('domainId', ParseUUIDPipe) domainId: string,
     @Body() dto: ChangePasswordDto,
   ): Promise<void> {
-    return this.usersService.changePassword(req.user.sub, dto);
+    return this.usersService.changePassword(domainId, dto);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Patch('account/activate')
-  activate(@Req() req: Request & { user: JwtPayload }): Promise<UserDto> {
-    return this.usersService.activate(req.user.sub);
+  @Patch(':domainId/activate')
+  activate(
+    @Param('domainId', ParseUUIDPipe) domainId: string,
+  ): Promise<UserDto> {
+    return this.usersService.activate(domainId);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Patch('account/deactivate')
-  deactivate(@Req() req: Request & { user: JwtPayload }): Promise<UserDto> {
-    return this.usersService.deactivate(req.user.sub);
+  @Patch(':domainId/deactivate')
+  deactivate(
+    @Param('domainId', ParseUUIDPipe) domainId: string,
+  ): Promise<UserDto> {
+    return this.usersService.deactivate(domainId);
   }
 }

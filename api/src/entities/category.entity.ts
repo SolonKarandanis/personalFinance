@@ -68,4 +68,8 @@ export class Category {
 
   @OneToMany(() => Transaction, (transaction) => transaction.category)
   transactions: Transaction[];
+
+  constructor(partial: Partial<Category>) {
+    Object.assign(this, partial);
+  }
 }

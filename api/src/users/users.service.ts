@@ -35,6 +35,10 @@ export class UsersService {
     return this.usersRepository.findOneBy({ id });
   }
 
+  findByDomainId(domainId: string): Promise<User | null> {
+    return this.usersRepository.findOneBy({ domainId });
+  }
+
   create(input: CreateUserInput): Promise<User> {
     const user = this.usersRepository.create(input);
     return this.usersRepository.save(user);
@@ -53,16 +57,19 @@ export class UsersService {
   }
 
   async updateProfile(
-    userId: number,
+    domainId: string,
     dto: UpdateProfileDto,
   ): Promise<UserDto> {
-    await this.findByIdOrThrow(userId);
-    await this.usersRepository.update(userId, dto);
-    return this.getSafeUser(userId);
+    const user = await this.findByDomainIdOrThrow(domainId);
+    await this.usersRepository.update(user.id, dto);
+    return this.getSafeUser(user.id);
   }
 
-  async changePassword(userId: number, dto: ChangePasswordDto): Promise<void> {
-    const user = await this.findByIdOrThrow(userId);
+  async changePassword(
+    domainId: string,
+    dto: ChangePasswordDto,
+  ): Promise<void> {
+    const user = await this.findByDomainIdOrThrow(domainId);
     const matches = await bcrypt.compare(
       dto.currentPassword,
       user.passwordHash,
@@ -76,34 +83,42 @@ export class UsersService {
     );
     // Changing the password revokes any outstanding refresh token, forcing
     // re-login on other sessions/devices.
-    await this.usersRepository.update(userId, {
+    await this.usersRepository.update(user.id, {
       passwordHash,
       hashedRefreshToken: null,
     });
   }
 
-  async activate(userId: number): Promise<UserDto> {
-    await this.findByIdOrThrow(userId);
-    await this.usersRepository.update(userId, {
+  async activate(domainId: string): Promise<UserDto> {
+    const user = await this.findByDomainIdOrThrow(domainId);
+    await this.usersRepository.update(user.id, {
       status: UserStatus.ACTIVE,
     });
-    return this.getSafeUser(userId);
+    return this.getSafeUser(user.id);
   }
 
-  async deactivate(userId: number): Promise<UserDto> {
-    await this.findByIdOrThrow(userId);
+  async deactivate(domainId: string): Promise<UserDto> {
+    const user = await this.findByDomainIdOrThrow(domainId);
     // Revoke the refresh token immediately so a deactivated account can't
     // silently mint new access tokens; the current access token still works
     // until its own ~15min expiry, which is inherent to stateless JWTs.
-    await this.usersRepository.update(userId, {
+    await this.usersRepository.update(user.id, {
       status: UserStatus.DEACTIVATED,
       hashedRefreshToken: null,
     });
-    return this.getSafeUser(userId);
+    return this.getSafeUser(user.id);
   }
 
   private async findByIdOrThrow(userId: number): Promise<User> {
     const user = await this.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return user;
+  }
+
+  private async findByDomainIdOrThrow(domainId: string): Promise<User> {
+    const user = await this.findByDomainId(domainId);
     if (!user) {
       throw new NotFoundException('User not found');
     }

@@ -55,4 +55,8 @@ export class Account {
 
   @OneToMany(() => Transaction, (transaction) => transaction.account)
   transactions: Transaction[];
+
+  constructor(partial: Partial<Account>) {
+    Object.assign(this, partial);
+  }
 }
