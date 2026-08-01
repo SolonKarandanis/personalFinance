@@ -28,6 +28,19 @@ Two triggers, added in `AddAccountBalanceTriggers` migration:
 
 Both were verified directly with SQL (insert/update/delete/initialBalance-edit sequence, wrapped in a rolled-back transaction) before any application code was built on top — caught a real bug where the first version only handled `initialBalance` *changes*, not the initial seed on account creation (new accounts started at 0 instead of matching `initialBalance`).
 
+## Category/Transaction type consistency, and why CategoryType has a TRANSFER value
+
+Decided that creating/updating a `Transaction` with a `categoryId` must validate `category.type === transaction.type`, rejecting the mismatch rather than just discouraging it in the UI — the dashboard's core features (spending-by-category, budget-vs-actual) are aggregations grouped by category, and a mismatched category corrupts those numbers silently rather than visibly. This is the same principle already applied to Categories' own subcategory rule (child's `type` must match its parent's).
+
+The open question this raised: `Transaction.type` has three values (`income`/`expense`/`transfer`), but `CategoryType` originally only had two. Considered blocking `categoryId` entirely for `transfer` transactions (a transfer between your own accounts isn't income or spending) vs. adding `CategoryType.TRANSFER`. Chose to add it:
+- The consistency rule becomes uniform across all three transaction types with no special case, instead of needing a carve-out for transfers specifically.
+- It's strictly more capable, not more restrictive — transfers can still go uncategorized, but can now also be meaningfully labeled (why the money moved: "Savings Transfer", "Debt Payment", etc.) rather than being blocked from categorization altogether.
+- Transfer categories stay informational, not counted as spending — `transfer`-type transactions already have to be excluded from expense/income totals in any aggregation regardless of whether transfer categories exist, so this doesn't add new reporting complexity.
+
+Seeded 4 default transfer categories (Savings Transfer, Investment Transfer, Debt Payment, Credit Card Payment) alongside the original 17 income/expense defaults.
+
+**Postgres migration gotcha hit while implementing this**: widening a Postgres enum (`ALTER TYPE ... ADD VALUE`) and then using that new value (e.g. an `INSERT` referencing it) **cannot happen in the same transaction** — Postgres rejects it. Since each TypeORM migration's `up()` runs in its own transaction, the enum-widening migration (`AddTransferCategoryType`) and the seed migration that uses the new value (`SeedTransferDefaultCategories`) had to be two separate migration files, not combined into one. Worth remembering for any future Postgres enum extension followed by a data seed.
+
 ## Authorization pattern
 
 Two different ownership-check patterns, chosen deliberately per case rather than one-size-fits-all:

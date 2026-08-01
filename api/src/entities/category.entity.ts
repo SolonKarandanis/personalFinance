@@ -13,6 +13,7 @@ import { AbstractEntity } from './abstract.entity';
 export enum CategoryType {
   INCOME = 'income',
   EXPENSE = 'expense',
+  TRANSFER = 'transfer',
 }
 
 @Entity('categories')
