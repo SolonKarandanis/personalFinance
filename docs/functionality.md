@@ -60,11 +60,20 @@ Tracks what's actually built vs. what's still planned. See `decisions.md` for th
 - **`source`/`externalId`/`isPending` aren't client-settable** here — always `manual`, reserved for the future CSV/Plaid ingestion path.
 - Verified: cross-user account ownership blocked on both create and transfer (404, including using someone else's account as a transfer destination).
 
+### Budgets (`/budgets`)
+- `POST /budgets` — create (`categoryDomainId`, positive `amount`, `period` [`weekly`/`monthly`/`yearly`], `startDate`). Only one budget per category per user is allowed — creating a second one for a category that already has a budget returns 409, pointing at updating the existing one instead.
+- `GET /budgets` / `GET /budgets/:domainId` — standard `{ domainId, userId }` ownership (Budget has a direct `userId` column, no join needed, same pattern as Accounts).
+- `PATCH /budgets/:domainId` — `amount`/`period`/`startDate` editable; `categoryDomainId` is not (to track a different category, create a new budget and delete the old one, same philosophy as Category's immutable `type`/`parentId`).
+- `DELETE /budgets/:domainId` — a real hard delete; nothing references a Budget by FK, so there's no cascade risk at all (unlike Accounts/Categories).
+- **`currentPeriodSpent` is computed on every read, not cached** — unlike `Account.currentBalance`, this is advisory/analytical, not a source of truth about actual money, so a live `SUM` query is the right level of consistency guarantee (see decisions.md).
+- **Periods are calendar-aligned**, not anchored to the budget's own `startDate`: weekly = Mon–Sun, monthly = 1st–last day of month, yearly = Jan 1–Dec 31 (`getCurrentPeriodRange` util). `startDate` only clamps the lower bound — activity before it never counts, even if the calendar period technically starts earlier. Verified: an expense dated before `startDate` is correctly excluded from `currentPeriodSpent` while one dated in-period is correctly included.
+- Category can be any type (income/expense/transfer) — no restriction, since the spend-vs-target comparison works identically regardless, and some budgeting styles track income or transfer goals the same way as expense limits.
+- The spend calculation joins `Transaction → Account` and filters by `Account.userId`, `categoryId`, and the effective date range — same relation-based ownership technique introduced for Transactions.
+
 ## Planned / not yet implemented
 
 - **Frontend**: still the default Angular scaffold — no login/register screens, no dashboard, no routing/guards, no HTTP client wiring for the API yet.
-- **Budget CRUD**: entity exists, no controller/service yet.
-- **Dashboard/reporting**: the actual point of the app — spending by category, budget vs. actual, balances over time. Needs Budgets CRUD first; Transactions is now in place to aggregate over.
+- **Dashboard/reporting**: the actual point of the app — a proper multi-entity view (spending by category, balances over time, budgets vs. actual all in one place). All four CRUD entities now exist to aggregate over; this would be new dedicated endpoint(s), not just what Budgets already exposes per-category.
 - **CSV import / Plaid bank sync**: schema is ready (`source`, `externalId`, `isPending` on `Transaction`), no import/sync logic written. Will exercise the balance triggers as a new write path — that's exactly why triggers were chosen over application-level recalculation.
 - **Shared types package**: discussed early on (a `packages/shared-types` for DTOs shared between `api` and `frontend`) but never set up.
 - **Roles**: no roles concept (e.g., admin) exists yet — every authorization check so far is "must be the resource's own owner," nothing more granular.

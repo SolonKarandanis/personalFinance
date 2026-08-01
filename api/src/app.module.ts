@@ -5,6 +5,7 @@ import { AccountsModule } from './accounts/accounts.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { BudgetsModule } from './budgets/budgets.module';
 import { CategoriesModule } from './categories/categories.module';
 import { typeOrmOptions } from './database/typeorm-options';
 import { TransactionsModule } from './transactions/transactions.module';
@@ -19,6 +20,7 @@ import { UsersModule } from './users/users.module';
     AccountsModule,
     CategoriesModule,
     TransactionsModule,
+    BudgetsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
