@@ -49,11 +49,22 @@ Tracks what's actually built vs. what's still planned. See `decisions.md` for th
 - `CategoryDto.isSystemDefault` tells clients which categories to hide edit/delete affordances for.
 - `CategoryType` has three values — `income`, `expense`, `transfer` — added specifically so `Transaction.type` can validate against `Category.type` with one uniform rule (no special-casing transfers as "never categorized") once Transactions is built. See decisions.md.
 
+### Transactions (`/transactions`)
+- `POST /transactions` — create a normal income/expense transaction (`accountDomainId`, optional `categoryDomainId`, positive `amount`, `date`, `description`, optional `notes`, `type`). `type` is restricted to `income`/`expense` at the DTO level — `transfer` is rejected here (400), since a lone transfer row with no pair would be a broken half-state.
+- `POST /transactions/transfer` — the only way a `transfer`-type row gets created. Takes `fromAccountDomainId`, `toAccountDomainId`, positive `amount`, plus the same date/description/notes/optional category. Creates both legs atomically in one DB transaction (`dataSource.transaction()`), linked via `transferPairId` — verified: both rows always exist together, both account balances update correctly via the existing triggers.
+- `GET /transactions` (optional `?accountDomainId=` filter) / `GET /transactions/:domainId` — ownership is via `Transaction.account.userId` (no direct `userId` column on Transaction), scoped with a relation-based `where: { account: { userId } }`.
+- `PATCH /transactions/:domainId` — `description`/`notes`/`date`/`categoryDomainId` always editable; `amount` is rejected (400) for `transfer`-type rows specifically, since editing one leg alone would desync the pair — delete and recreate instead.
+- `DELETE /transactions/:domainId` — for a transfer, deletes both legs atomically; a transfer can never end up with only one leg left behind. Verified: both rows removed, both account balances revert correctly.
+- **Sign normalization**: `amount` in all DTOs is always a positive magnitude — the client never negates anything. The service applies the sign: negative for `expense`/the transfer source leg, positive for `income`/the transfer destination leg. Storage stays signed as already decided for the balance triggers.
+- **Category consistency enforced**: `category.type` must equal `transaction.type` (400 on mismatch) — verified end-to-end. Category resolution reuses the same own-or-system-default visibility rule as Categories.
+- **`source`/`externalId`/`isPending` aren't client-settable** here — always `manual`, reserved for the future CSV/Plaid ingestion path.
+- Verified: cross-user account ownership blocked on both create and transfer (404, including using someone else's account as a transfer destination).
+
 ## Planned / not yet implemented
 
 - **Frontend**: still the default Angular scaffold — no login/register screens, no dashboard, no routing/guards, no HTTP client wiring for the API yet.
-- **Transaction/Budget CRUD**: entities exist, no controllers/services yet. `Transaction` will need the same `{ domainId, userId }` scoping pattern as Accounts/Categories, the transfer-pairing logic (atomic two-row create via `EntityManager`/`dataSource.transaction()`), and — now decided — a `category.type === transaction.type` check on create/update (rejecting the mismatch, not just discouraging it in the UI). `CategoryType.TRANSFER` exists specifically so this rule needs no special case for transfers.
-- **Dashboard/reporting**: the actual point of the app — spending by category, budget vs. actual, balances over time. Needs Transactions/Budgets CRUD first.
+- **Budget CRUD**: entity exists, no controller/service yet.
+- **Dashboard/reporting**: the actual point of the app — spending by category, budget vs. actual, balances over time. Needs Budgets CRUD first; Transactions is now in place to aggregate over.
 - **CSV import / Plaid bank sync**: schema is ready (`source`, `externalId`, `isPending` on `Transaction`), no import/sync logic written. Will exercise the balance triggers as a new write path — that's exactly why triggers were chosen over application-level recalculation.
 - **Shared types package**: discussed early on (a `packages/shared-types` for DTOs shared between `api` and `frontend`) but never set up.
 - **Roles**: no roles concept (e.g., admin) exists yet — every authorization check so far is "must be the resource's own owner," nothing more granular.
