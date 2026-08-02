@@ -22,6 +22,8 @@
     "@ngrx/operators": "22.0.0-beta.0",
     "@ngrx/signals": "22.0.0-beta.0",
     "@spartan-ng/brain": "^1.3.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
     "rxjs": "~7.8.0",
     "tailwind-merge": "^3.5.0",
     "tslib": "^2.3.0",

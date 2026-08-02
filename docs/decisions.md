@@ -96,6 +96,31 @@ Considered Angular, AnalogJS, and a React SPA (Vite + TanStack Router + TanStack
 - **AnalogJS** — a meta-framework on top of Angular adding SSR/SSG and file-based routing (Angular's answer to Next.js). Explicitly ruled out: this dashboard sits behind auth, so there's no SEO benefit to SSR, and it would add hydration/server-client complexity for no real gain. Its bundled API-routes feature would also be redundant since NestJS is already the API layer.
 - **TanStack Router (React SPA)** — a strong alternative, especially given `@trpc/react-query`'s native pairing with TanStack Query. Passed on once Angular was chosen for the DI/decorator consistency with the backend.
 
+## Frontend UI/state stack: Spartan UI + NgRx Signal Store + httpResource-based repositories
+
+**UI library**: Spartan UI (`@spartan-ng/brain` + helm — shadcn-style two-layer: unstyled accessible primitives from npm, styled components copied into the codebase and owned there), on Tailwind CSS v4.
+
+**State management**: NgRx Signal Store (`@ngrx/signals`), not classic NgRx store/effects.
+
+**Architecture layering**, modeled on the documented conventions in a reference project (`/home/solonk/4TB/Projects/Spring/patient-management/frontent/docs/architecture-boundaries.md` and `architecture-state-management.md`), adapted rather than copied 1:1:
+
+- `Repository → Store → Service → smart/dumb Component`. Components never call a data-access service directly; only services touch stores; only smart components (`Page`/`Search`/`Detail`/`Edit`/`Overview` suffixes) touch services. A store never depends on another store — combining several is a service's job.
+- **Signal Store granularity**: a store manages exactly one responsibility — Search/list state, Detail/edit state, Lookup data, a piece of UI state, or (new category, not in the reference doc) read-only aggregate/dashboard state. A "manage" CRUD feature is always at least two stores (Search + Detail), never one.
+- **Deliberate deviation from the reference project**: this project uses Angular's `httpResource()` for *every* Repository GET method, not just the one-off read-only-aggregate-store exception the reference project uses it for. POST/PUT/PATCH/DELETE stay on plain `HttpClient`. Consequence: `resourceCallState()` (adapting an `httpResource`'s own status signals to the same `loading`/`loaded`/`error`/`status` shape `withCallState()` produces) becomes the *normal* way every store's read side reports state, while `withCallState()` narrows to just the write/mutation side.
+- **Consequence for staying in sync after a mutation**: rather than manually splicing a mutation's HTTP response into store state (what the reference project does), a successful mutation calls `.reload()` on the affected `httpResource`(s). Avoids two sources of truth for the same server data now that `httpResource` owns reads.
+- **Reactive/live filtering**: search/list criteria are signals feeding directly into a store's `httpResource` request function, so typing a filter auto-refetches — no explicit "Search" button, unlike the reference project's `rxMethod`-dispatched search. Enabled specifically by using `httpResource` for reads.
+- **Sheriff** (Nx domain-boundary lint enforcement, used by the reference project) — explicitly skipped. It's calibrated for multi-contributor codebases; not worth the setup overhead for a solo project. Conventions are followed by discipline, not automated enforcement.
+- **Category gets two separate stores** despite both reading from the same `/categories` endpoint: `CategoryLookupStore` (shared — minimal, just the list, used by Transaction/Budget form dropdowns) and `CategorySearchStore`/`CategoryDetailStore` (the dedicated "manage categories" CRUD screen). Different UI jobs, so different stores, per the granularity rule.
+- Planned per-domain stores: `users` → `UserDetailStore` only (always "my own profile", no search needed); `accounts` → Search+Detail; `categories` → Lookup + Search+Detail (above); `transactions` → Search+Detail (Detail handles both normal create and `createTransfer`, since a transfer is still "a Transaction" once it exists); `budgets` → Search+Detail; `dashboard` → future aggregate store, once backend reporting endpoints exist. `AuthStore` is the one cross-cutting exception to the granularity categories (holds the in-memory access token; the refresh token itself lives in the httpOnly cookie already built on the backend).
+
+### Toolchain gotchas hit setting this up (Angular 22.1.0)
+
+- `@spartan-ng/cli init` auto-runs `npm install` regardless of the project's actual package manager — failed here on jsdom's postinstall step (`npm-run-all: not found`), an npm-vs-pnpm hoisting difference, not a real problem. Just run `pnpm install` manually afterward.
+- That same run left `tailwindcss` itself out of `package.json` (only added `@spartan-ng/brain`, `@angular/cdk`, `tailwind-merge`, `tw-animate-css`) and pinned `@angular/cdk` to an exact old patch (`22.0.0`) mismatched with the rest of Angular (`^22.1.0`). Both had to be fixed by hand.
+- **Real bug in `@angular/build@22.1.1`**: its persistent build cache (`.angular/cache`) writes something it can't correctly read back — a build with a *fresh* cache succeeds, but the very next build (reading that cache) reproducibly fails with `"contents" must be a string or a Uint8Array [plugin angular-compiler]`. Confirmed by alternating fresh-cache/cached builds. Fixed by disabling the cache entirely: `frontend/angular.json` → `"cli": { "cache": { "enabled": false } }`. Don't re-enable without retesting against a newer Angular patch.
+- TypeScript 6.0 deprecated `baseUrl` (errors by default unless silenced). Path aliases (`@core/*` etc.) in `tsconfig.json` are declared without `baseUrl`, using `./`-prefixed path values instead (bundler module resolution doesn't need `baseUrl` alongside `paths`).
+- `@ngrx/signals`/`@ngrx/operators` stable (`21.1.1`) declares peer `@angular/core: ^21.0.0` — doesn't support Angular 22. Used `22.0.0-beta.0` instead (explicitly declares `^22.0.0`, published ~10 days before this was set up). Revisit once a stable 22.x ships.
+
 ## Monorepo: Turborepo
 
 Considered Nx, Turborepo, and plain pnpm workspaces (no build orchestrator).

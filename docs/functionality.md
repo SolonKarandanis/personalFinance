@@ -70,9 +70,30 @@ Tracks what's actually built vs. what's still planned. See `decisions.md` for th
 - Category can be any type (income/expense/transfer) — no restriction, since the spend-vs-target comparison works identically regardless, and some budgeting styles track income or transfer goals the same way as expense limits.
 - The spend calculation joins `Transaction → Account` and filters by `Account.userId`, `categoryId`, and the effective date range — same relation-based ownership technique introduced for Transactions.
 
+### Frontend — foundation (in progress, 2026-08-01)
+
+Architecture: Repository → Signal Store → Service → smart/dumb Component, modeled after `/home/solonk/4TB/Projects/Spring/patient-management/frontent`'s documented conventions (`docs/architecture-boundaries.md`, `docs/architecture-state-management.md`), adapted for this project's own rule — every Repository GET uses Angular's `httpResource()`, every mutation (POST/PUT/PATCH/DELETE) uses plain `HttpClient`. No Sheriff (domain-boundary lint enforcement) — deliberately skipped, not needed at this scale. Full reasoning and the confirmed store-per-domain breakdown are in `decisions.md`.
+
+**Done:**
+- Tailwind CSS v4 + Spartan UI (`@spartan-ng/brain`, "neutral" theme) installed and building correctly — CSS-first config in `src/styles.css`, light/dark theme tokens in place.
+- `@ngrx/signals` / `@ngrx/operators` installed (`22.0.0-beta.0` — stable `21.1.1` doesn't support Angular 22 yet).
+- Core infrastructure: `BaseRepository`, `ApiEndpoints` (endpoint URL constants), `withCallState()` (mutation loading/error tracking), `resourceCallState()` (adapts an `httpResource`'s own status signals to the same shape) — both in `core/store/features/`.
+- Environments (`environment.ts`/`environment.development.ts`, `apiUrl`) and path aliases (`@core/*`, `@shared/*`, `@app/*`, `@environments/*`) configured in `tsconfig.json`.
+- `app.config.ts` has `provideHttpClient()` (interceptor not wired in yet — see below).
+- Build verified reliably green across multiple consecutive runs (see the Angular CLI cache bug note in decisions.md — this needed an explicit fix, wasn't free).
+
+**In progress / blocked:**
+- Adding actual Spartan UI components (button, input, etc.) via `ng g @spartan-ng/cli:ui <name>` — first-time use triggers a `components.json` setup step that prompts for an import alias; not yet gotten past non-interactively. No UI primitives generated yet, so no real markup/styling exists in any component.
+
+**Not started yet:**
+- `AuthRepository` (login/register/refresh/logout HTTP calls), `AuthStore` (in-memory access token, `isAuthenticated`, silent-refresh-on-bootstrap via an app initializer), the auth `HttpInterceptorFn` (attach `Authorization` header + `withCredentials: true` + 401-triggers-refresh-then-retry), and the route guard.
+- Login/register page components.
+- Verifying the auth vertical slice actually works end-to-end in a real browser (register → login → refresh → logout, guard redirects).
+- Every domain feature area: `users` (self-profile, `UserDetailStore` only), `accounts` (`AccountSearchStore`/`AccountDetailStore`), `categories` (`CategoryLookupStore` for dropdowns + `CategorySearchStore`/`CategoryDetailStore` for the management screen), `transactions` (`TransactionSearchStore`/`TransactionDetailStore`, including the transfer-creation flow), `budgets` (`BudgetSearchStore`/`BudgetDetailStore`).
+- App shell/layout and routing tying the above together.
+
 ## Planned / not yet implemented
 
-- **Frontend**: still the default Angular scaffold — no login/register screens, no dashboard, no routing/guards, no HTTP client wiring for the API yet.
 - **Dashboard/reporting**: the actual point of the app — a proper multi-entity view (spending by category, balances over time, budgets vs. actual all in one place). All four CRUD entities now exist to aggregate over; this would be new dedicated endpoint(s), not just what Budgets already exposes per-category.
 - **CSV import / Plaid bank sync**: schema is ready (`source`, `externalId`, `isPending` on `Transaction`), no import/sync logic written. Will exercise the balance triggers as a new write path — that's exactly why triggers were chosen over application-level recalculation.
 - **Shared types package**: discussed early on (a `packages/shared-types` for DTOs shared between `api` and `frontend`) but never set up.
