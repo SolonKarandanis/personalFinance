@@ -4,15 +4,35 @@ import { authGuard } from '@core/guards/auth.guard';
 export const routes: Routes = [
   {
     path: 'login',
-    loadComponent: () => import('./auth/login/login.page').then((m) => m.LoginPage),
+    loadComponent: () =>
+      import('./auth/login/login-page.component').then((m) => m.LoginPageComponent),
   },
   {
     path: 'register',
-    loadComponent: () => import('./auth/register/register.page').then((m) => m.RegisterPage),
+    loadComponent: () =>
+      import('./auth/register/register-page.component').then((m) => m.RegisterPageComponent),
   },
   {
     path: '',
     canActivate: [authGuard],
-    loadComponent: () => import('./home/home.page').then((m) => m.HomePage),
+    loadComponent: () => import('./home/home-page.component').then((m) => m.HomePageComponent),
+  },
+  {
+    path: 'accounts',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./accounts/accounts-page.component').then((m) => m.AccountsPageComponent),
+  },
+  {
+    path: 'accounts/new',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./accounts/account-edit-page.component').then((m) => m.AccountEditPageComponent),
+  },
+  {
+    path: 'accounts/:domainId/edit',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./accounts/account-edit-page.component').then((m) => m.AccountEditPageComponent),
   },
 ];

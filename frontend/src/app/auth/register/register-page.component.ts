@@ -56,7 +56,7 @@ import { AuthStore } from '@core/store/auth/auth.store';
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class RegisterPage {
+export class RegisterPageComponent {
   protected readonly authStore = inject(AuthStore);
   private readonly fb = inject(FormBuilder);
   private readonly router = inject(Router);

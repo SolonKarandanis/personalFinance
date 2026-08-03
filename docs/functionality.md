@@ -70,27 +70,34 @@ Tracks what's actually built vs. what's still planned. See `decisions.md` for th
 - Category can be any type (income/expense/transfer) — no restriction, since the spend-vs-target comparison works identically regardless, and some budgeting styles track income or transfer goals the same way as expense limits.
 - The spend calculation joins `Transaction → Account` and filters by `Account.userId`, `categoryId`, and the effective date range — same relation-based ownership technique introduced for Transactions.
 
-### Frontend — foundation (in progress, 2026-08-01)
+### Frontend — auth vertical slice complete, domain features not started (updated 2026-08-03)
 
 Architecture: Repository → Signal Store → Service → smart/dumb Component, modeled after `/home/solonk/4TB/Projects/Spring/patient-management/frontent`'s documented conventions (`docs/architecture-boundaries.md`, `docs/architecture-state-management.md`), adapted for this project's own rule — every Repository GET uses Angular's `httpResource()`, every mutation (POST/PUT/PATCH/DELETE) uses plain `HttpClient`. No Sheriff (domain-boundary lint enforcement) — deliberately skipped, not needed at this scale. Full reasoning and the confirmed store-per-domain breakdown are in `decisions.md`.
 
 **Done:**
-- Tailwind CSS v4 + Spartan UI (`@spartan-ng/brain`, "neutral" theme) installed and building correctly — CSS-first config in `src/styles.css`, light/dark theme tokens in place.
+- Tailwind CSS v4 + Spartan UI (`@spartan-ng/brain` + helm, "nova" style, import alias `@spartan-ng/helm`) installed and building correctly — CSS-first config in `src/styles.css`, light/dark theme tokens in place. `components.json` setup completed (`componentsPath: src/app/shared/ui`) — the earlier non-interactive-setup blocker is resolved.
+- Spartan UI components generated via `ng g @spartan-ng/cli:ui <name>`: `button`, `card`, `input`, `label` (`shared/ui/{button,card,input,label,utils}`).
 - `@ngrx/signals` / `@ngrx/operators` installed (`22.0.0-beta.0` — stable `21.1.1` doesn't support Angular 22 yet).
 - Core infrastructure: `BaseRepository`, `ApiEndpoints` (endpoint URL constants), `withCallState()` (mutation loading/error tracking), `resourceCallState()` (adapts an `httpResource`'s own status signals to the same shape) — both in `core/store/features/`.
 - Environments (`environment.ts`/`environment.development.ts`, `apiUrl`) and path aliases (`@core/*`, `@shared/*`, `@app/*`, `@environments/*`) configured in `tsconfig.json`.
-- `app.config.ts` has `provideHttpClient()` (interceptor not wired in yet — see below).
+- **Auth vertical slice, end to end**:
+  - `AuthRepository` (`core/repositories/auth.repository.ts`) — login/register/refresh/logout, all `withCredentials: true` so the refresh cookie round-trips.
+  - `AuthStore` (`core/store/auth/`) — the one cross-cutting exception to the store-granularity rule. In-memory `accessToken` signal (never persisted, per decisions.md), `bootstrapped` flag, `isAuthenticated` computed, `login`/`register`/`logout` as `rxMethod`s, and `tryRestoreSession()` as a plain async method (not an rxMethod, since the app initializer needs an awaitable `Promise`).
+  - `authInterceptor` (`core/interceptors/auth.interceptor.ts`) — attaches `Authorization: Bearer` + `withCredentials: true` to every request; on a 401 from a non-auth endpoint, calls `/auth/refresh` once and retries the original request, clearing the session on refresh failure.
+  - `authGuard` (`core/guards/auth.guard.ts`) — redirects to `/login` when `isAuthenticated()` is false.
+  - `app.config.ts` wires `provideHttpClient(withInterceptors([authInterceptor]))` plus `provideAppInitializer(() => authStore.tryRestoreSession())`, which blocks bootstrap until the httpOnly refresh cookie has been checked — so route guards can read `isAuthenticated()` synchronously with no loading state to juggle.
+  - `LoginPage` / `RegisterPage` (`app/auth/`) — reactive forms (email/password, plus first/last name for register), real Spartan UI markup (`HlmCard`/`HlmInput`/`HlmLabel`/`HlmButton`), inline error display from `authStore.error()`, redirect-to-`/` via an `effect()` watching `isAuthenticated()`.
+  - `HomePage` (`app/home/`) — placeholder landing page behind `authGuard`, just a logout button.
+  - `app.routes.ts` — `/login`, `/register` public; `''` → `HomePage` behind `authGuard`.
 - Build verified reliably green across multiple consecutive runs (see the Angular CLI cache bug note in decisions.md — this needed an explicit fix, wasn't free).
 
-**In progress / blocked:**
-- Adding actual Spartan UI components (button, input, etc.) via `ng g @spartan-ng/cli:ui <name>` — first-time use triggers a `components.json` setup step that prompts for an import alias; not yet gotten past non-interactively. No UI primitives generated yet, so no real markup/styling exists in any component.
+**Uncommitted:**
+- `frontend/package.json`/`pnpm-lock.yaml` add `@tailwindcss/postcss` + `postcss` as dev dependencies, and a new `frontend/.postcssrc.json` (`{ "plugins": { "@tailwindcss/postcss": {} } }`) — a toolchain addition not yet committed.
 
 **Not started yet:**
-- `AuthRepository` (login/register/refresh/logout HTTP calls), `AuthStore` (in-memory access token, `isAuthenticated`, silent-refresh-on-bootstrap via an app initializer), the auth `HttpInterceptorFn` (attach `Authorization` header + `withCredentials: true` + 401-triggers-refresh-then-retry), and the route guard.
-- Login/register page components.
-- Verifying the auth vertical slice actually works end-to-end in a real browser (register → login → refresh → logout, guard redirects).
+- Verifying the auth vertical slice actually works end-to-end in a real browser against the live backend (register → login → refresh → logout, guard redirects) — built and code-reviewed, not yet exercised live.
 - Every domain feature area: `users` (self-profile, `UserDetailStore` only), `accounts` (`AccountSearchStore`/`AccountDetailStore`), `categories` (`CategoryLookupStore` for dropdowns + `CategorySearchStore`/`CategoryDetailStore` for the management screen), `transactions` (`TransactionSearchStore`/`TransactionDetailStore`, including the transfer-creation flow), `budgets` (`BudgetSearchStore`/`BudgetDetailStore`).
-- App shell/layout and routing tying the above together.
+- App shell/layout (nav, etc.) beyond the bare `HomePage` placeholder.
 
 ## Planned / not yet implemented
 
