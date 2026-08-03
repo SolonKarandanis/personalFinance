@@ -17,7 +17,7 @@ import { AuthStore } from '@core/store/auth/auth.store';
             [routerLinkActiveOptions]="{ exact: true }"
             class="rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
           >
-            Home
+            Dashboard
           </a>
           <a
             routerLink="/accounts"

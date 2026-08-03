@@ -7,4 +7,5 @@ export const ApiEndpoints = {
   CATEGORIES: `${environment.apiUrl}/categories`,
   TRANSACTIONS: `${environment.apiUrl}/transactions`,
   BUDGETS: `${environment.apiUrl}/budgets`,
+  DASHBOARD: `${environment.apiUrl}/dashboard`,
 } as const;

@@ -19,7 +19,8 @@ export const routes: Routes = [
     children: [
       {
         path: '',
-        loadComponent: () => import('./home/home-page.component').then((m) => m.HomePageComponent),
+        loadComponent: () =>
+          import('./dashboard/dashboard-page.component').then((m) => m.DashboardPageComponent),
       },
       {
         path: 'accounts',
