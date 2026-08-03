@@ -33,6 +33,20 @@ import { AuthStore } from '@core/store/auth/auth.store';
           >
             Categories
           </a>
+          <a
+            routerLink="/transactions"
+            routerLinkActive="bg-muted text-foreground"
+            class="rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            Transactions
+          </a>
+          <a
+            routerLink="/budgets"
+            routerLinkActive="bg-muted text-foreground"
+            class="rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            Budgets
+          </a>
         </nav>
         <button hlmBtn variant="outline" (click)="authStore.logout()">Log out</button>
       </aside>
