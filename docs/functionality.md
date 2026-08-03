@@ -70,34 +70,47 @@ Tracks what's actually built vs. what's still planned. See `decisions.md` for th
 - Category can be any type (income/expense/transfer) — no restriction, since the spend-vs-target comparison works identically regardless, and some budgeting styles track income or transfer goals the same way as expense limits.
 - The spend calculation joins `Transaction → Account` and filters by `Account.userId`, `categoryId`, and the effective date range — same relation-based ownership technique introduced for Transactions.
 
-### Frontend — auth vertical slice complete, domain features not started (updated 2026-08-03)
+### Frontend — auth + all 4 domain CRUD features + sidebar shell complete (updated 2026-08-03)
 
 Architecture: Repository → Signal Store → Service → smart/dumb Component, modeled after `/home/solonk/4TB/Projects/Spring/patient-management/frontent`'s documented conventions (`docs/architecture-boundaries.md`, `docs/architecture-state-management.md`), adapted for this project's own rule — every Repository GET uses Angular's `httpResource()`, every mutation (POST/PUT/PATCH/DELETE) uses plain `HttpClient`. No Sheriff (domain-boundary lint enforcement) — deliberately skipped, not needed at this scale. Full reasoning and the confirmed store-per-domain breakdown are in `decisions.md`.
 
-**Done:**
-- Tailwind CSS v4 + Spartan UI (`@spartan-ng/brain` + helm, "nova" style, import alias `@spartan-ng/helm`) installed and building correctly — CSS-first config in `src/styles.css`, light/dark theme tokens in place. `components.json` setup completed (`componentsPath: src/app/shared/ui`) — the earlier non-interactive-setup blocker is resolved.
-- Spartan UI components generated via `ng g @spartan-ng/cli:ui <name>`: `button`, `card`, `input`, `label` (`shared/ui/{button,card,input,label,utils}`).
-- `@ngrx/signals` / `@ngrx/operators` installed (`22.0.0-beta.0` — stable `21.1.1` doesn't support Angular 22 yet).
-- Core infrastructure: `BaseRepository`, `ApiEndpoints` (endpoint URL constants), `withCallState()` (mutation loading/error tracking), `resourceCallState()` (adapts an `httpResource`'s own status signals to the same shape) — both in `core/store/features/`.
-- Environments (`environment.ts`/`environment.development.ts`, `apiUrl`) and path aliases (`@core/*`, `@shared/*`, `@app/*`, `@environments/*`) configured in `tsconfig.json`.
-- **Auth vertical slice, end to end**:
-  - `AuthRepository` (`core/repositories/auth.repository.ts`) — login/register/refresh/logout, all `withCredentials: true` so the refresh cookie round-trips.
-  - `AuthStore` (`core/store/auth/`) — the one cross-cutting exception to the store-granularity rule. In-memory `accessToken` signal (never persisted, per decisions.md), `bootstrapped` flag, `isAuthenticated` computed, `login`/`register`/`logout` as `rxMethod`s, and `tryRestoreSession()` as a plain async method (not an rxMethod, since the app initializer needs an awaitable `Promise`).
-  - `authInterceptor` (`core/interceptors/auth.interceptor.ts`) — attaches `Authorization: Bearer` + `withCredentials: true` to every request; on a 401 from a non-auth endpoint, calls `/auth/refresh` once and retries the original request, clearing the session on refresh failure.
-  - `authGuard` (`core/guards/auth.guard.ts`) — redirects to `/login` when `isAuthenticated()` is false.
-  - `app.config.ts` wires `provideHttpClient(withInterceptors([authInterceptor]))` plus `provideAppInitializer(() => authStore.tryRestoreSession())`, which blocks bootstrap until the httpOnly refresh cookie has been checked — so route guards can read `isAuthenticated()` synchronously with no loading state to juggle.
-  - `LoginPage` / `RegisterPage` (`app/auth/`) — reactive forms (email/password, plus first/last name for register), real Spartan UI markup (`HlmCard`/`HlmInput`/`HlmLabel`/`HlmButton`), inline error display from `authStore.error()`, redirect-to-`/` via an `effect()` watching `isAuthenticated()`.
-  - `HomePage` (`app/home/`) — placeholder landing page behind `authGuard`, just a logout button.
-  - `app.routes.ts` — `/login`, `/register` public; `''` → `HomePage` behind `authGuard`.
-- Build verified reliably green across multiple consecutive runs (see the Angular CLI cache bug note in decisions.md — this needed an explicit fix, wasn't free).
+**Naming convention**: every smart page component is `<name>-page.component.ts`, class `<Name>PageComponent` (e.g. `accounts-page.component.ts` → `AccountsPageComponent`) — see `decisions.md`.
 
-**Uncommitted:**
-- `frontend/package.json`/`pnpm-lock.yaml` add `@tailwindcss/postcss` + `postcss` as dev dependencies, and a new `frontend/.postcssrc.json` (`{ "plugins": { "@tailwindcss/postcss": {} } }`) — a toolchain addition not yet committed.
+**Toolchain / infrastructure — done:**
+- Tailwind CSS v4 + Spartan UI (`@spartan-ng/brain` + helm, "nova" style, import alias `@spartan-ng/helm`), CSS-first config in `src/styles.css`, light/dark theme tokens.
+- Spartan UI primitives generated via `ng g @spartan-ng/cli:ui <name>`: `button`, `card`, `input`, `label`, `native-select` (`shared/ui/{button,card,input,label,native-select,utils}`).
+- `@ngrx/signals` / `@ngrx/operators` (`22.0.0-beta.0` — stable `21.1.1` doesn't support Angular 22 yet).
+- Core infrastructure: `BaseRepository`, `ApiEndpoints`, `withCallState()` (mutation loading/error tracking), `resourceCallState()` (adapts an `httpResource`'s own status signals to the same shape) — `core/store/features/`. Environments and path aliases (`@core/*`, `@shared/*`, `@app/*`, `@environments/*`) configured. **Cross-feature imports (e.g. a Lookup store from another domain) use the `@app/*` alias, not relative paths** — a relative-path mistake here produced a confusing type-inference error cascade, see `decisions.md`.
+
+**Auth vertical slice — done, verified live in browser:**
+- `AuthRepository`, `AuthStore` (`core/store/auth/` — the one cross-cutting exception to store granularity: in-memory `accessToken`, `bootstrapped`, `isAuthenticated`, `login`/`register`/`logout` as `rxMethod`s, `tryRestoreSession()` as a plain awaitable async method), `authInterceptor` (401 → refresh → retry once), `authGuard`. `app.config.ts`'s `provideAppInitializer` blocks bootstrap on `tryRestoreSession()` so guards read `isAuthenticated()` synchronously.
+- `LoginPageComponent` / `RegisterPageComponent` (`app/auth/`) — reactive forms, Spartan UI markup, inline error from `authStore.error()`.
+
+**App shell — done:**
+- `AppShellComponent` (`app/layout/`) — persistent sidebar (Home/Accounts/Categories/Transactions/Budgets links with active-route highlighting, logout button) wrapping a `<router-outlet>`. `app.routes.ts` nests every authenticated route as a child under one `canActivate: [authGuard]` parent that loads the shell, instead of repeating the guard per route.
+- `HomePageComponent` — minimal welcome placeholder now that nav/logout live in the sidebar.
+
+**Accounts (`app/accounts/`) — full CRUD, done:**
+- `AccountRepository`, `AccountSearchStore`, `AccountDetailStore`, `AccountLookupStore` (dropdown data for other domains' forms — see `decisions.md`), `AccountsService`.
+- `AccountsPageComponent` — table (name, type, institution, `currentBalance`, "Archived" badge — archived accounts stay visible, never hidden). `AccountEditPageComponent` — create/edit in one component; archive via `DELETE` (never a hard delete, matches the backend).
+
+**Categories (`app/categories/`) — full CRUD + hierarchy, done:**
+- `CategoryRepository`, `CategorySearchStore`, `CategoryDetailStore`, `CategoryLookupStore`, `CategoriesService`.
+- `CategoriesPageComponent` — grouped by type (Income/Expense/Transfer), subcategories nested under their parent, system defaults shown with a "Default" badge and no edit/delete affordances. `CategoryEditPageComponent` — `type`/`parentDomainId` shown disabled once editing (immutable post-creation, matches the backend); the parent dropdown reactively filters to top-level categories of the currently-selected type.
+
+**Transactions (`app/transactions/`) — full CRUD + transfer flow, done:**
+- `TransactionRepository`, `TransactionSearchStore` (the first Search store with real filter state — `accountDomainIdFilter`, reactively feeding `GET /transactions?accountDomainId=`, no explicit "search" button needed), `TransactionDetailStore` (`create()` and `createTransfer()` both live here — a transfer is still "a Transaction" once it exists), `TransactionsService` (combines 4 stores: Search, Detail, `AccountLookupStore`, `CategoryLookupStore`).
+- `TransactionsPageComponent` — account filter dropdown, flat list showing every row including both transfer legs separately (no frontend merging), "Transfer" badge with delete-only (no edit link — see the scope decision below). `TransactionEditPageComponent` — normal income/expense create/edit, `account`/`type` disabled once editing (immutable post-creation). `TransactionTransferPageComponent` — separate create-only form (from/to account, transfer-type category), "to account" dropdown reactively excludes whatever's picked as "from".
+- **Transfers are delete-only in the UI, never edited** — the backend already signals this philosophy (`PATCH` rejects `amount` on a transfer leg with "delete and recreate instead"); extended to the whole row since editing one leg's `date`/`description`/`category` would silently desync the pair's shared display fields.
+
+**Budgets (`app/budgets/`) — full CRUD, done:**
+- `BudgetRepository`, `BudgetSearchStore`, `BudgetDetailStore` (no Lookup store — nothing looks up budgets), `BudgetsService` (combines Search, Detail, `CategoryLookupStore`).
+- `BudgetsPageComponent` — each budget shown with a manually-built progress bar (two styled `<div>`s, not a generated Spartan primitive — kept minimal, matches the color-swatch-not-a-component precedent from Categories) comparing `currentPeriodSpent` to `amount`, red when over, plus the live `currentPeriodStart`–`currentPeriodEnd` range. `BudgetEditPageComponent` — `categoryDomainId` disabled once editing (only immutable field here — `period`/`amount`/`startDate` all stay editable, unlike Accounts/Categories/Transactions where more fields lock); create form's category dropdown excludes categories that already have a budget, pre-empting the backend's 409.
 
 **Not started yet:**
-- Verifying the auth vertical slice actually works end-to-end in a real browser against the live backend (register → login → refresh → logout, guard redirects) — built and code-reviewed, not yet exercised live.
-- Every domain feature area: `users` (self-profile, `UserDetailStore` only), `accounts` (`AccountSearchStore`/`AccountDetailStore`), `categories` (`CategoryLookupStore` for dropdowns + `CategorySearchStore`/`CategoryDetailStore` for the management screen), `transactions` (`TransactionSearchStore`/`TransactionDetailStore`, including the transfer-creation flow), `budgets` (`BudgetSearchStore`/`BudgetDetailStore`).
-- App shell/layout (nav, etc.) beyond the bare `HomePage` placeholder.
+- `users` — self-profile view/edit (`UserDetailStore` only, no search).
+- Dashboard/reporting — the actual point of the app; needs new backend aggregate endpoint(s), nothing built yet on either side.
+- Frontend tests — none written for any feature yet.
 
 ## Planned / not yet implemented
 

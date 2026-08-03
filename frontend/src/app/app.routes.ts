@@ -87,6 +87,10 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./budgets/budget-edit-page.component').then((m) => m.BudgetEditPageComponent),
       },
+      {
+        path: 'profile',
+        loadComponent: () => import('./profile/profile-page.component').then((m) => m.ProfilePageComponent),
+      },
     ],
   },
 ];

@@ -47,6 +47,13 @@ import { AuthStore } from '@core/store/auth/auth.store';
           >
             Budgets
           </a>
+          <a
+            routerLink="/profile"
+            routerLinkActive="bg-muted text-foreground"
+            class="rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            Profile
+          </a>
         </nav>
         <button hlmBtn variant="outline" (click)="authStore.logout()">Log out</button>
       </aside>
