@@ -9,7 +9,7 @@ import { Account } from './data/repositories/account.repository';
   selector: 'app-accounts-page',
   imports: [RouterLink, HlmButton, HlmCard],
   template: `
-    <div class="min-h-screen bg-background p-4">
+    <div class="p-4">
       <div class="mx-auto flex max-w-4xl flex-col gap-4">
         <div class="flex items-center justify-between">
           <h1 class="text-xl font-semibold">Accounts</h1>

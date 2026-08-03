@@ -32,7 +32,7 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
     HlmNativeSelectOption,
   ],
   template: `
-    <div class="flex min-h-screen items-center justify-center bg-background p-4">
+    <div class="flex justify-center p-8">
       <div hlmCard class="w-full max-w-sm p-6">
         <h1 class="mb-6 text-xl font-semibold">{{ domainId() ? 'Edit account' : 'New account' }}</h1>
         <form [formGroup]="form" (ngSubmit)="submit()" class="flex flex-col gap-4">

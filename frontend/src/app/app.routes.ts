@@ -15,24 +15,42 @@ export const routes: Routes = [
   {
     path: '',
     canActivate: [authGuard],
-    loadComponent: () => import('./home/home-page.component').then((m) => m.HomePageComponent),
-  },
-  {
-    path: 'accounts',
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import('./accounts/accounts-page.component').then((m) => m.AccountsPageComponent),
-  },
-  {
-    path: 'accounts/new',
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import('./accounts/account-edit-page.component').then((m) => m.AccountEditPageComponent),
-  },
-  {
-    path: 'accounts/:domainId/edit',
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import('./accounts/account-edit-page.component').then((m) => m.AccountEditPageComponent),
+    loadComponent: () => import('./layout/app-shell.component').then((m) => m.AppShellComponent),
+    children: [
+      {
+        path: '',
+        loadComponent: () => import('./home/home-page.component').then((m) => m.HomePageComponent),
+      },
+      {
+        path: 'accounts',
+        loadComponent: () =>
+          import('./accounts/accounts-page.component').then((m) => m.AccountsPageComponent),
+      },
+      {
+        path: 'accounts/new',
+        loadComponent: () =>
+          import('./accounts/account-edit-page.component').then((m) => m.AccountEditPageComponent),
+      },
+      {
+        path: 'accounts/:domainId/edit',
+        loadComponent: () =>
+          import('./accounts/account-edit-page.component').then((m) => m.AccountEditPageComponent),
+      },
+      {
+        path: 'categories',
+        loadComponent: () =>
+          import('./categories/categories-page.component').then((m) => m.CategoriesPageComponent),
+      },
+      {
+        path: 'categories/new',
+        loadComponent: () =>
+          import('./categories/category-edit-page.component').then((m) => m.CategoryEditPageComponent),
+      },
+      {
+        path: 'categories/:domainId/edit',
+        loadComponent: () =>
+          import('./categories/category-edit-page.component').then((m) => m.CategoryEditPageComponent),
+      },
+    ],
   },
 ];
