@@ -70,7 +70,7 @@ Tracks what's actually built vs. what's still planned. See `decisions.md` for th
 - Category can be any type (income/expense/transfer) — no restriction, since the spend-vs-target comparison works identically regardless, and some budgeting styles track income or transfer goals the same way as expense limits.
 - The spend calculation joins `Transaction → Account` and filters by `Account.userId`, `categoryId`, and the effective date range — same relation-based ownership technique introduced for Transactions.
 
-### Frontend — auth + all 4 domain CRUD features + sidebar shell complete (updated 2026-08-03)
+### Frontend — auth + all 5 domain areas + sidebar shell complete (updated 2026-08-03)
 
 Architecture: Repository → Signal Store → Service → smart/dumb Component, modeled after `/home/solonk/4TB/Projects/Spring/patient-management/frontent`'s documented conventions (`docs/architecture-boundaries.md`, `docs/architecture-state-management.md`), adapted for this project's own rule — every Repository GET uses Angular's `httpResource()`, every mutation (POST/PUT/PATCH/DELETE) uses plain `HttpClient`. No Sheriff (domain-boundary lint enforcement) — deliberately skipped, not needed at this scale. Full reasoning and the confirmed store-per-domain breakdown are in `decisions.md`.
 
@@ -87,7 +87,7 @@ Architecture: Repository → Signal Store → Service → smart/dumb Component, 
 - `LoginPageComponent` / `RegisterPageComponent` (`app/auth/`) — reactive forms, Spartan UI markup, inline error from `authStore.error()`.
 
 **App shell — done:**
-- `AppShellComponent` (`app/layout/`) — persistent sidebar (Home/Accounts/Categories/Transactions/Budgets links with active-route highlighting, logout button) wrapping a `<router-outlet>`. `app.routes.ts` nests every authenticated route as a child under one `canActivate: [authGuard]` parent that loads the shell, instead of repeating the guard per route.
+- `AppShellComponent` (`app/layout/`) — persistent sidebar (Home/Accounts/Categories/Transactions/Budgets/Profile links with active-route highlighting, logout button) wrapping a `<router-outlet>`. `app.routes.ts` nests every authenticated route as a child under one `canActivate: [authGuard]` parent that loads the shell, instead of repeating the guard per route.
 - `HomePageComponent` — minimal welcome placeholder now that nav/logout live in the sidebar.
 
 **Accounts (`app/accounts/`) — full CRUD, done:**
@@ -107,8 +107,13 @@ Architecture: Repository → Signal Store → Service → smart/dumb Component, 
 - `BudgetRepository`, `BudgetSearchStore`, `BudgetDetailStore` (no Lookup store — nothing looks up budgets), `BudgetsService` (combines Search, Detail, `CategoryLookupStore`).
 - `BudgetsPageComponent` — each budget shown with a manually-built progress bar (two styled `<div>`s, not a generated Spartan primitive — kept minimal, matches the color-swatch-not-a-component precedent from Categories) comparing `currentPeriodSpent` to `amount`, red when over, plus the live `currentPeriodStart`–`currentPeriodEnd` range. `BudgetEditPageComponent` — `categoryDomainId` disabled once editing (only immutable field here — `period`/`amount`/`startDate` all stay editable, unlike Accounts/Categories/Transactions where more fields lock); create form's category dropdown excludes categories that already have a budget, pre-empting the backend's 409.
 
+**Profile (`app/profile/`) — self-service account management, done, verified live:**
+- `UserRepository`, `UserDetailStore` (the only single-purpose Detail store with no Search/Lookup counterpart — there's only ever one profile, "my own" — and the only Detail store that owns both read and write state itself, since there's no separate Search store to split them across; its read-side signals are named `profileLoading`/`profileError`, not `loading`/`error`, to avoid colliding with `withCallState()`'s write-side names on the same store), `UsersService` (coordinates with the cross-cutting `AuthStore`: a successful password change or deactivation calls `authStore.logout()`, since the backend already revokes the refresh token server-side for both).
+- `ProfilePageComponent` — one page, three independent forms sharing the one store: profile details (firstName/lastName editable; email/currency/status/createdAt read-only), change password (redirects to `/login` on success), deactivate account (behind `confirm()`, also redirects to `/login`). Each form snapshots its own error locally from the store's shared error signal at the moment it fails, rather than binding that signal directly in more than one place — otherwise one form's error would bleed into another's display.
+- **No "Activate" UI** — deliberately out of scope: a deactivated user is rejected at login/refresh (403) before ever holding a valid JWT, so they could never reach a self-service "activate" call in the first place; the backend endpoint exists for a future admin capability that doesn't exist yet (see `decisions.md`'s Roles note).
+- Verified via curl: profile update, wrong-current-password rejection (401), a successful password change correctly invalidating the old refresh cookie while a fresh login with the new password succeeds, and deactivation correctly causing subsequent login attempts to 403.
+
 **Not started yet:**
-- `users` — self-profile view/edit (`UserDetailStore` only, no search).
 - Dashboard/reporting — the actual point of the app; needs new backend aggregate endpoint(s), nothing built yet on either side.
 - Frontend tests — none written for any feature yet.
 
