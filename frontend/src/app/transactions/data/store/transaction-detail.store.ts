@@ -4,6 +4,8 @@ import { patchState, signalStore, withComputed, withMethods, withProps, withStat
 import {
   CreateTransactionRequest,
   CreateTransferRequest,
+  ImportResult,
+  ImportTransactionRow,
   Transaction,
   TransactionRepository,
   UpdateTransactionRequest,
@@ -88,6 +90,22 @@ export const TransactionDetailStore = signalStore(
         try {
           await firstValueFrom(transactionRepository.deleteTransaction(domainId));
           state.setLoadedState();
+        } catch (error) {
+          state.setErrorState(errorMessage(error));
+          throw error;
+        }
+      },
+      async importTransactions(
+        accountDomainId: string,
+        rows: ImportTransactionRow[],
+      ): Promise<ImportResult> {
+        state.setLoadingState();
+        try {
+          const result = await firstValueFrom(
+            transactionRepository.importTransactions(accountDomainId, rows),
+          );
+          state.setLoadedState();
+          return result;
         } catch (error) {
           state.setErrorState(errorMessage(error));
           throw error;

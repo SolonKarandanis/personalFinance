@@ -75,6 +75,13 @@ export const routes: Routes = [
           import('./transactions/transaction-edit-page.component').then((m) => m.TransactionEditPageComponent),
       },
       {
+        path: 'transactions/import',
+        loadComponent: () =>
+          import('./transactions/transaction-import-page.component').then(
+            (m) => m.TransactionImportPageComponent,
+          ),
+      },
+      {
         path: 'budgets',
         loadComponent: () => import('./budgets/budgets-page.component').then((m) => m.BudgetsPageComponent),
       },

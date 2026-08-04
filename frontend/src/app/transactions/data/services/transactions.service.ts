@@ -6,6 +6,8 @@ import { CategoryLookupStore } from '@app/categories/data/store/category-lookup.
 import {
   CreateTransactionRequest,
   CreateTransferRequest,
+  ImportResult,
+  ImportTransactionRow,
   Transaction,
   UpdateTransactionRequest,
 } from '../repositories/transaction.repository';
@@ -69,5 +71,11 @@ export class TransactionsService {
   async deleteTransaction(domainId: string): Promise<void> {
     await this.detailStore.remove(domainId);
     this.searchStore.reload();
+  }
+
+  async importTransactions(accountDomainId: string, rows: ImportTransactionRow[]): Promise<ImportResult> {
+    const result = await this.detailStore.importTransactions(accountDomainId, rows);
+    this.searchStore.reload();
+    return result;
   }
 }

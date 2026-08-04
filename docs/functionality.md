@@ -70,7 +70,15 @@ Tracks what's actually built vs. what's still planned. See `decisions.md` for th
 - Category can be any type (income/expense/transfer) — no restriction, since the spend-vs-target comparison works identically regardless, and some budgeting styles track income or transfer goals the same way as expense limits.
 - The spend calculation joins `Transaction → Account` and filters by `Account.userId`, `categoryId`, and the effective date range — same relation-based ownership technique introduced for Transactions.
 
-### Frontend — auth + all 5 domain areas + sidebar shell complete (updated 2026-08-03)
+### Dashboard (`/dashboard`)
+- `GET /dashboard/summary` — the only endpoint; scoped by `userId` from the JWT like Budgets, no `:domainId`. Returns `{ categoryBreakdown, monthlyTrend }`.
+- **`categoryBreakdown`** — current calendar month, `income`/`expense` transactions grouped by category (a `null` group becomes `"Uncategorized"`), summed as positive magnitudes. Reuses `getCurrentPeriodRange('monthly', now)` from `budgets/budget-period.util.ts` rather than reimplementing month-boundary math.
+- **`monthlyTrend`** — last 6 calendar months, separate `income`/`expense` sums per month, always returned zero-filled for months with no activity (never a gap).
+- Both queries exclude `type = 'transfer'` — same already-established rule that transfer rows never count in expense/income totals in any aggregation.
+- No new entity, no migration — this is the first place the originally-planned "use QueryBuilder/raw SQL for analytics queries" (see `decisions.md`) actually got exercised.
+- **Net worth and budgets-vs-actual needed no new endpoint at all** — `GET /accounts` already returns `currentBalance` per account, and `GET /budgets` already returns live `currentPeriodSpent`/`amount`; the frontend just recombines already-built data. Verified via curl against real test data: category breakdown and 6-month trend both match expected values from known test transactions.
+
+### Frontend — auth + all 5 domain areas + dashboard + sidebar shell complete (updated 2026-08-04)
 
 Architecture: Repository → Signal Store → Service → smart/dumb Component, modeled after `/home/solonk/4TB/Projects/Spring/patient-management/frontent`'s documented conventions (`docs/architecture-boundaries.md`, `docs/architecture-state-management.md`), adapted for this project's own rule — every Repository GET uses Angular's `httpResource()`, every mutation (POST/PUT/PATCH/DELETE) uses plain `HttpClient`. No Sheriff (domain-boundary lint enforcement) — deliberately skipped, not needed at this scale. Full reasoning and the confirmed store-per-domain breakdown are in `decisions.md`.
 
@@ -87,8 +95,8 @@ Architecture: Repository → Signal Store → Service → smart/dumb Component, 
 - `LoginPageComponent` / `RegisterPageComponent` (`app/auth/`) — reactive forms, Spartan UI markup, inline error from `authStore.error()`.
 
 **App shell — done:**
-- `AppShellComponent` (`app/layout/`) — persistent sidebar (Home/Accounts/Categories/Transactions/Budgets/Profile links with active-route highlighting, logout button) wrapping a `<router-outlet>`. `app.routes.ts` nests every authenticated route as a child under one `canActivate: [authGuard]` parent that loads the shell, instead of repeating the guard per route.
-- `HomePageComponent` — minimal welcome placeholder now that nav/logout live in the sidebar.
+- `AppShellComponent` (`app/layout/`) — persistent sidebar (Dashboard/Accounts/Categories/Transactions/Budgets/Profile links with active-route highlighting, logout button) wrapping a `<router-outlet>`. `app.routes.ts` nests every authenticated route as a child under one `canActivate: [authGuard]` parent that loads the shell, instead of repeating the guard per route.
+- The `''` route loads `DashboardPageComponent` directly — the placeholder `HomePageComponent` was removed once the dashboard had real content to show (see below); "the dashboard is the landing page" rather than a separate nav item on top of "Home".
 
 **Accounts (`app/accounts/`) — full CRUD, done:**
 - `AccountRepository`, `AccountSearchStore`, `AccountDetailStore`, `AccountLookupStore` (dropdown data for other domains' forms — see `decisions.md`), `AccountsService`.
@@ -113,13 +121,17 @@ Architecture: Repository → Signal Store → Service → smart/dumb Component, 
 - **No "Activate" UI** — deliberately out of scope: a deactivated user is rejected at login/refresh (403) before ever holding a valid JWT, so they could never reach a self-service "activate" call in the first place; the backend endpoint exists for a future admin capability that doesn't exist yet (see `decisions.md`'s Roles note).
 - Verified via curl: profile update, wrong-current-password rejection (401), a successful password change correctly invalidating the old refresh cookie while a fresh login with the new password succeeds, and deactivation correctly causing subsequent login attempts to 403.
 
+**Dashboard (`app/dashboard/`) — the app's landing page, done:**
+- `DashboardRepository`, `DashboardStore` (the reserved 5th store category from the granularity rules — read-only aggregate state, no Search/Detail split, named with no further suffix), `DashboardService` (combines 4 stores: the new `DashboardStore` plus already-built `AccountLookupStore`, `BudgetSearchStore`, `CategoryLookupStore` — net worth and budgets-vs-actual needed no new backend call at all, just a different view over data those domains already expose).
+- `DashboardPageComponent` — net worth hero figure + per-account balance list; spending-by-category (this month) as a sequential-blue horizontal bar list, sorted by magnitude, capped at 8 rows; income-vs-expense (6 months) as a hand-rolled SVG line chart (2 categorical series); budgets-vs-actual reusing the exact progress-bar treatment already built for `/budgets`, linking there for full management rather than duplicating it.
+- **No charting library added** — plain HTML/SVG, built using the `dataviz` skill's method and reference palette (validated via `scripts/validate_palette.js` for both light and dark, all checks pass). Full reasoning — form choices, color slot assignment, and the deliberate interaction-layer simplifications (native tooltips, no table-view twin) — is in `decisions.md`.
+- Verified: net worth and category-breakdown/trend numbers cross-checked against direct `/accounts`, `/budgets`, and `/dashboard/summary` curl calls against real test data — all matched.
+
 **Not started yet:**
-- Dashboard/reporting — the actual point of the app; needs new backend aggregate endpoint(s), nothing built yet on either side.
 - Frontend tests — none written for any feature yet.
 
 ## Planned / not yet implemented
 
-- **Dashboard/reporting**: the actual point of the app — a proper multi-entity view (spending by category, balances over time, budgets vs. actual all in one place). All four CRUD entities now exist to aggregate over; this would be new dedicated endpoint(s), not just what Budgets already exposes per-category.
 - **CSV import / Plaid bank sync**: schema is ready (`source`, `externalId`, `isPending` on `Transaction`), no import/sync logic written. Will exercise the balance triggers as a new write path — that's exactly why triggers were chosen over application-level recalculation.
 - **Shared types package**: discussed early on (a `packages/shared-types` for DTOs shared between `api` and `frontend`) but never set up.
 - **Roles**: no roles concept (e.g., admin) exists yet — every authorization check so far is "must be the resource's own owner," nothing more granular.

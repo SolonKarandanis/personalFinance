@@ -49,6 +49,29 @@ export interface UpdateTransactionRequest {
   notes?: string;
 }
 
+// Signed amount, no `type` field — deliberately different from every other
+// transaction request shape, since this matches how a bank statement export
+// actually looks (negative = money out, positive = money in). The backend
+// derives `type` from the sign. See decisions.md.
+export interface ImportTransactionRow {
+  date: string;
+  description: string;
+  amount: number;
+  category?: string;
+  notes?: string;
+}
+
+export interface ImportRowFailure {
+  row: number;
+  error: string;
+}
+
+export interface ImportResult {
+  imported: number;
+  duplicates: number;
+  failed: ImportRowFailure[];
+}
+
 // GET methods use httpResource — authInterceptor attaches the Authorization
 // header and withCredentials to every outgoing request, including these.
 @Injectable({ providedIn: 'root' })
@@ -87,5 +110,9 @@ export class TransactionRepository extends BaseRepository {
 
   deleteTransaction(domainId: string): Observable<void> {
     return this.http.delete<void>(`${ApiEndpoints.TRANSACTIONS}/${domainId}`);
+  }
+
+  importTransactions(accountDomainId: string, rows: ImportTransactionRow[]): Observable<ImportResult> {
+    return this.http.post<ImportResult>(`${ApiEndpoints.TRANSACTIONS}/import`, { accountDomainId, rows });
   }
 }

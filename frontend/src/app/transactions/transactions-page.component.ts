@@ -16,6 +16,7 @@ import { Transaction } from './data/repositories/transaction.repository';
         <div class="flex items-center justify-between">
           <h1 class="text-xl font-semibold">Transactions</h1>
           <div class="flex gap-2">
+            <a hlmBtn variant="outline" routerLink="/transactions/import">Import CSV</a>
             <a hlmBtn variant="outline" routerLink="/transactions/transfer/new">New transfer</a>
             <a hlmBtn routerLink="/transactions/new">New transaction</a>
           </div>

@@ -4,7 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { createHash } from 'node:crypto';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { Account } from '../entities/account.entity';
 import { Category } from '../entities/category.entity';
 import {
@@ -14,6 +15,7 @@ import {
 } from '../entities/transaction.entity';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { CreateTransferDto } from './dto/create-transfer.dto';
+import { ImportResultDto, ImportRowFailureDto } from './dto/import-result.dto';
 import { TransactionDto } from './dto/transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 
@@ -131,6 +133,97 @@ export class TransactionsService {
       from: await this.findOne(userId, fromDomainId),
       to: await this.findOne(userId, toDomainId),
     };
+  }
+
+  // Rows are processed independently — one bad row doesn't block the rest
+  // of the batch, which is the whole point of a bulk import. See
+  // decisions.md for the sign convention (signed amounts, no `type` column)
+  // and dedup strategy (content-hashed externalId).
+  async importTransactions(
+    userId: number,
+    accountDomainId: string,
+    rows: unknown[],
+  ): Promise<ImportResultDto> {
+    const account = await this.resolveOwnedAccount(userId, accountDomainId);
+    const visibleCategories = await this.categoriesRepository.find({
+      where: [{ userId }, { userId: IsNull() }],
+    });
+
+    const failed: ImportRowFailureDto[] = [];
+    const seenInBatch = new Set<string>();
+    const candidates: Array<{
+      externalId: string;
+      date: string;
+      description: string;
+      amount: number;
+      notes?: string;
+      categoryName?: string;
+    }> = [];
+    let duplicates = 0;
+
+    rows.forEach((raw, index) => {
+      const result = parseImportRow(raw);
+      if ('error' in result) {
+        failed.push({ row: index + 1, error: result.error });
+        return;
+      }
+      const externalId = hashImportRow(
+        account.id,
+        result.date,
+        result.description,
+        result.amount,
+      );
+      if (seenInBatch.has(externalId)) {
+        duplicates++;
+        return;
+      }
+      seenInBatch.add(externalId);
+      candidates.push({ externalId, ...result });
+    });
+
+    const existingIds = candidates.length
+      ? new Set(
+          (
+            await this.transactionsRepository.find({
+              where: {
+                source: TransactionSource.CSV_IMPORT,
+                externalId: In(candidates.map((c) => c.externalId)),
+              },
+              select: { externalId: true },
+            })
+          ).map((t) => t.externalId),
+        )
+      : new Set<string>();
+
+    let imported = 0;
+    for (const row of candidates) {
+      if (existingIds.has(row.externalId)) {
+        duplicates++;
+        continue;
+      }
+      const type =
+        row.amount < 0 ? TransactionType.EXPENSE : TransactionType.INCOME;
+      const category = row.categoryName
+        ? findCategoryByName(visibleCategories, row.categoryName, type)
+        : undefined;
+
+      await this.transactionsRepository.save(
+        this.transactionsRepository.create({
+          accountId: account.id,
+          categoryId: category?.id,
+          amount: row.amount.toFixed(2),
+          date: row.date,
+          description: row.description,
+          notes: row.notes,
+          type,
+          source: TransactionSource.CSV_IMPORT,
+          externalId: row.externalId,
+        }),
+      );
+      imported++;
+    }
+
+    return { imported, duplicates, failed };
   }
 
   async findAll(
@@ -263,4 +356,77 @@ export class TransactionsService {
     }
     return transaction;
   }
+}
+
+type ParsedImportRow = {
+  date: string;
+  description: string;
+  amount: number;
+  notes?: string;
+  categoryName?: string;
+};
+
+function parseImportRow(raw: unknown): ParsedImportRow | { error: string } {
+  if (typeof raw !== 'object' || raw === null) {
+    return { error: 'Row is not an object' };
+  }
+  const { date, description, amount, category, notes } =
+    raw as Record<string, unknown>;
+
+  if (
+    typeof date !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    Number.isNaN(Date.parse(date))
+  ) {
+    return { error: 'Invalid or missing date (expected YYYY-MM-DD)' };
+  }
+  if (typeof description !== 'string' || !description.trim()) {
+    return { error: 'Missing description' };
+  }
+  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount === 0) {
+    return { error: 'Invalid or missing amount' };
+  }
+
+  return {
+    date,
+    description: description.trim(),
+    amount,
+    categoryName:
+      typeof category === 'string' && category.trim()
+        ? category.trim()
+        : undefined,
+    notes: typeof notes === 'string' && notes.trim() ? notes.trim() : undefined,
+  };
+}
+
+// Own-or-system-default categories, matched by name (case-insensitive) and
+// the derived transaction type — a miss returns undefined rather than
+// throwing, since mis-typed category text shouldn't block otherwise-good
+// transaction data from importing.
+function findCategoryByName(
+  categories: Category[],
+  name: string,
+  type: TransactionType,
+): Category | undefined {
+  const normalized = name.trim().toLowerCase();
+  return categories.find(
+    (category) =>
+      category.name.trim().toLowerCase() === normalized &&
+      (category.type as string) === (type as string),
+  );
+}
+
+// accountId is part of the hash specifically so two different users'
+// identical-looking transactions never collide — the DB's
+// UQ_transaction_source_external_id constraint is global across all users,
+// not per-user.
+function hashImportRow(
+  accountId: number,
+  date: string,
+  description: string,
+  amount: number,
+): string {
+  return createHash('sha256')
+    .update(`${accountId}|${date}|${description}|${amount.toFixed(2)}`)
+    .digest('hex');
 }
